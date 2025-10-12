@@ -81,4 +81,5 @@ networks:
 
 volumes:
   postgres_data:
+  chroma_data:
   # ollama_data:  # Uncomment if using Ollama

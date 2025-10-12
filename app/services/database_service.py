@@ -1,5 +1,6 @@
 """Database service for executing SQL queries."""
 from typing import List, Dict, Any, Optional
+import re
 from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.exc import SQLAlchemyError
@@ -172,35 +173,55 @@ class DatabaseService:
         Returns:
             Tuple of (is_valid, error_message)
         """
-        query_upper = query.strip().upper()
+        query_stripped = query.strip()
+        query_upper = query_stripped.upper()
 
-        # Check if query contains only allowed operations
+        # Check if query is empty
+        if not query_stripped:
+            return False, "Query cannot be empty"
+
+        # Check 1: First word must be from allowed operations
+        first_word = query_stripped.split()[0].upper()
         allowed_ops = settings.allowed_sql_ops_list
 
-        # Check for disallowed operations
-        disallowed = ["DELETE", "DROP", "TRUNCATE", "ALTER", "CREATE", "INSERT", "UPDATE"]
+        if first_word not in allowed_ops:
+            return False, f"Query must start with one of: {', '.join(allowed_ops)}. Got: {first_word}"
 
-        for op in disallowed:
-            if op in query_upper and op not in allowed_ops:
-                return False, f"Operation '{op}' is not allowed. Only {', '.join(allowed_ops)} operations are permitted."
-
-        # Must start with SELECT
-        if not any(query_upper.startswith(op) for op in allowed_ops):
-            return False, f"Query must start with one of: {', '.join(allowed_ops)}"
-
-        # Check for dangerous patterns
-        dangerous_patterns = [
-            "EXECUTE",
-            "EXEC",
-            "xp_",
-            "sp_",
-            "GRANT",
-            "REVOKE"
+        # Check 2: Look for dangerous SQL commands as whole words
+        # Using word boundaries \b to avoid false positives like "created_at"
+        dangerous_commands = [
+            r'\bDELETE\b', r'\bDROP\b', r'\bTRUNCATE\b',
+            r'\bALTER\b', r'\bCREATE\b', r'\bINSERT\b',
+            r'\bUPDATE\b', r'\bEXECUTE\b', r'\bEXEC\b',
+            r'\bGRANT\b', r'\bREVOKE\b'
         ]
 
-        for pattern in dangerous_patterns:
-            if pattern in query_upper:
-                return False, f"Dangerous pattern '{pattern}' detected in query"
+        for pattern in dangerous_commands:
+            if re.search(pattern, query_upper):
+                # Extract command name from pattern
+                cmd = pattern.strip(r'\b').strip('\\')
+                # Check if it's actually allowed
+                if cmd not in allowed_ops:
+                    return False, f"Dangerous operation '{cmd}' detected in query. Only {', '.join(allowed_ops)} operations are permitted."
+
+        # Check 3: Look for dangerous stored procedure patterns
+        dangerous_patterns = [
+            (r'xp_', 'xp_'),
+            (r'sp_', 'sp_'),
+        ]
+
+        for pattern, name in dangerous_patterns:
+            if re.search(pattern, query_upper):
+                return False, f"Dangerous pattern '{name}' detected in query"
+
+        # Check 4: Prevent SQL injection attempts with multiple statements
+        # Look for semicolons that might indicate multiple statements
+        # But allow semicolon at the end
+        semicolon_count = query_stripped.count(';')
+        if semicolon_count > 1:
+            return False, "Multiple SQL statements are not allowed"
+        if semicolon_count == 1 and not query_stripped.rstrip().endswith(';'):
+            return False, "Multiple SQL statements are not allowed"
 
         return True, "Query is valid"
 

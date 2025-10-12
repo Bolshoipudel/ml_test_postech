@@ -12,6 +12,7 @@ from app.api.routes import router
 from app.models.schemas import ErrorResponse
 from app.services.database_service import db_service
 from app.agents.sql_agent import sql_agent
+from app.agents.rag_agent import rag_agent
 
 
 # Configure logger
@@ -40,8 +41,10 @@ async def lifespan(app: FastAPI):
         logger.info("Initializing SQL Agent...")
         sql_agent.initialize()
 
+        logger.info("Initializing RAG Agent...")
+        rag_agent.initialize(load_docs=True, docs_directory="./data/docs")
+
         # TODO: Initialize other services
-        # - Load vector store for RAG
         # - Initialize Web Search agent
         # - Initialize Router agent
 

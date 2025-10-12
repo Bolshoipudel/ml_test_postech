@@ -136,4 +136,93 @@ class TestDatabaseService:
 
         is_valid, msg = service.validate_query("SELECT * FROM users; EXEC xp_cmdshell;")
         assert is_valid is False
-        assert "dangerous" in msg.lower() or "EXEC" in msg
+        assert "multiple" in msg.lower() or "EXEC" in msg
+
+    def test_validate_query_with_created_at(self):
+        """Test that queries with created_at column pass validation."""
+        service = DatabaseService()
+
+        # This should NOT be blocked even though it contains "CREATE" in "created_at"
+        query = "SELECT id, name, created_at, updated_at FROM products;"
+        is_valid, msg = service.validate_query(query)
+        assert is_valid is True, f"Query was blocked incorrectly: {msg}"
+
+    def test_validate_query_with_updated_at(self):
+        """Test that queries with updated_at column pass validation."""
+        service = DatabaseService()
+
+        # This should NOT be blocked even though it contains "UPDATE" in "updated_at"
+        query = "SELECT id, title, updated_at FROM incidents WHERE status = 'open';"
+        is_valid, msg = service.validate_query(query)
+        assert is_valid is True, f"Query was blocked incorrectly: {msg}"
+
+    def test_validate_query_multiple_statements_blocked(self):
+        """Test that multiple SQL statements are blocked."""
+        service = DatabaseService()
+
+        # Multiple statements with semicolons
+        is_valid, msg = service.validate_query("SELECT * FROM users; SELECT * FROM products;")
+        assert is_valid is False
+        assert "multiple" in msg.lower()
+
+    def test_validate_query_insert_blocked(self):
+        """Test that INSERT queries are blocked."""
+        service = DatabaseService()
+
+        is_valid, msg = service.validate_query("INSERT INTO users (name) VALUES ('test');")
+        assert is_valid is False
+        assert "INSERT" in msg
+
+    def test_validate_query_update_blocked(self):
+        """Test that UPDATE queries are blocked."""
+        service = DatabaseService()
+
+        is_valid, msg = service.validate_query("UPDATE users SET name = 'test' WHERE id = 1;")
+        assert is_valid is False
+        assert "UPDATE" in msg
+
+    def test_validate_query_create_blocked(self):
+        """Test that CREATE queries are blocked."""
+        service = DatabaseService()
+
+        is_valid, msg = service.validate_query("CREATE TABLE test (id INT);")
+        assert is_valid is False
+        assert "CREATE" in msg
+
+    def test_validate_query_alter_blocked(self):
+        """Test that ALTER queries are blocked."""
+        service = DatabaseService()
+
+        is_valid, msg = service.validate_query("ALTER TABLE users ADD COLUMN test VARCHAR(50);")
+        assert is_valid is False
+        assert "ALTER" in msg
+
+    def test_validate_query_truncate_blocked(self):
+        """Test that TRUNCATE queries are blocked."""
+        service = DatabaseService()
+
+        is_valid, msg = service.validate_query("TRUNCATE TABLE users;")
+        assert is_valid is False
+        assert "TRUNCATE" in msg
+
+    def test_validate_query_empty_string(self):
+        """Test that empty queries are blocked."""
+        service = DatabaseService()
+
+        is_valid, msg = service.validate_query("")
+        assert is_valid is False
+        assert "empty" in msg.lower()
+
+    def test_validate_query_with_joins(self):
+        """Test that SELECT with JOINs passes validation."""
+        service = DatabaseService()
+
+        query = """
+        SELECT tm.first_name, tm.last_name, p.name
+        FROM team_members tm
+        JOIN features f ON tm.id = f.assigned_to
+        JOIN products p ON f.product_id = p.id
+        WHERE p.status = 'active';
+        """
+        is_valid, msg = service.validate_query(query)
+        assert is_valid is True

@@ -1,7 +1,7 @@
 from app.models.schemas import (
     ChatRequest,
     ChatResponse,
-    ChatMessage,
+    Message,
     MessageRole,
     ToolType,
     ToolUsage,
@@ -13,7 +13,7 @@ from app.models.schemas import (
 __all__ = [
     "ChatRequest",
     "ChatResponse",
-    "ChatMessage",
+    "Message",
     "MessageRole",
     "ToolType",
     "ToolUsage",

@@ -20,6 +20,7 @@ from app.models.schemas import (
 )
 from app.config import settings
 from app.agents.sql_agent import sql_agent
+from app.agents.rag_agent import rag_agent
 
 router = APIRouter(prefix="/api/v1", tags=["api"])
 
@@ -124,15 +125,47 @@ async def chat(request: ChatRequest):
                 ))
             sources = ["database"]
 
-        elif any(keyword in message_lower for keyword in ['как работает', 'что такое', 'документация', 'инструкция']):
-            # RAG-related query
-            tools_used.append(ToolUsage(
-                tool_type=ToolType.RAG,
-                query=request.message,
-                result_summary="Documentation search completed"
-            ))
-            response_text = "Это вопрос о документации. (Агент RAG пока не реализован)"
-            sources = ["documentation"]
+        elif any(keyword in message_lower for keyword in ['как работает', 'что такое', 'документация', 'инструкция', 'описание', 'возможности', 'функции', 'архитектура', 'интеграция', 'поддержка', 'лицензирование', 'требования']):
+            # RAG-related query - use RAG Agent
+            try:
+                logger.info(f"Routing to RAG Agent for question: {request.message}")
+
+                result = rag_agent.answer_question(request.message, top_k=5)
+
+                if result["success"]:
+                    tools_used.append(ToolUsage(
+                        tool_type=ToolType.RAG,
+                        query=request.message,
+                        result_summary=f"Найдено {result['relevant_chunks']} релевантных документов",
+                        metadata={
+                            "retrieved_chunks": result["retrieved_chunks"],
+                            "relevant_chunks": result["relevant_chunks"],
+                            "top_similarity": result.get("top_similarity", 0.0)
+                        }
+                    ))
+                    response_text = result["answer"]
+                    sources = [f"documentation: {src}" for src in result["sources"]]
+                else:
+                    # RAG failed
+                    logger.warning(f"RAG Agent failed: {result.get('answer')}")
+                    response_text = result["answer"]
+                    tools_used.append(ToolUsage(
+                        tool_type=ToolType.RAG,
+                        query=request.message,
+                        result_summary="Релевантные документы не найдены",
+                        metadata={"error": result.get("error", "No relevant documents")}
+                    ))
+                    sources = []
+
+            except Exception as e:
+                logger.error(f"RAG Agent error: {e}")
+                response_text = f"Произошла ошибка при поиске в документации: {str(e)}"
+                tools_used.append(ToolUsage(
+                    tool_type=ToolType.RAG,
+                    result_summary="Ошибка RAG Agent",
+                    metadata={"error": str(e)}
+                ))
+                sources = []
 
         elif any(keyword in message_lower for keyword in ['новости', 'тренд', 'найди информацию', 'поищи']):
             # Web search query
@@ -260,3 +293,87 @@ async def get_stats():
         "active_llm_provider": settings.llm_provider,
         "active_vector_store": settings.vector_store
     }
+
+
+@router.get("/rag/stats")
+async def get_rag_stats():
+    """Get RAG collection statistics and test search."""
+    try:
+        if not rag_agent._initialized:
+            rag_agent.initialize(load_docs=False)
+
+        stats = rag_agent.get_collection_info()
+
+        # Test search
+        test_query = "PT Sandbox"
+        test_results = rag_agent.rag_service.search(test_query, top_k=3)
+
+        return {
+            "collection_stats": stats,
+            "test_search": {
+                "query": test_query,
+                "results_count": len(test_results),
+                "top_results": [
+                    {
+                        "filename": r['metadata'].get('filename', 'unknown'),
+                        "distance": r['distance'],
+                        "similarity": max(0.0, min(1.0, 1.0 - r['distance'])),
+                        "content_preview": r['content'][:100] + "..."
+                    }
+                    for r in test_results[:3]
+                ]
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error getting RAG stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/rag/reload")
+async def reload_rag_documents():
+    """Force reload documents from disk."""
+    try:
+        logger.info("Force reloading RAG documents...")
+        rag_agent.reload_documents("./data/docs")
+        stats = rag_agent.get_collection_info()
+        return {
+            "success": True,
+            "message": "Documents reloaded successfully",
+            "stats": stats
+        }
+    except Exception as e:
+        logger.error(f"Error reloading documents: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/rag/debug/{query}")
+async def debug_rag_search(query: str):
+    """Debug RAG search to see actual distances and similarities."""
+    try:
+        if not rag_agent._initialized:
+            rag_agent.initialize(load_docs=False)
+
+        results = rag_agent.rag_service.search(query, top_k=5)
+
+        debug_info = []
+        for r in results:
+            distance = r['distance']
+            similarity = max(0.0, min(1.0, 1.0 - distance))
+
+            debug_info.append({
+                "filename": r['metadata'].get('filename', 'unknown'),
+                "distance": round(distance, 4),
+                "similarity": round(similarity, 4),
+                "passes_threshold_0.3": similarity >= 0.3,
+                "passes_threshold_0.5": similarity >= 0.5,
+                "content_preview": r['content'][:150] + "..."
+            })
+
+        return {
+            "query": query,
+            "total_results": len(results),
+            "results": debug_info
+        }
+    except Exception as e:
+        logger.error(f"Error in debug search: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

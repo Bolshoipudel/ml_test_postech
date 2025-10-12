@@ -1,8 +1,7 @@
 """LLM Factory for creating LLM instances."""
-from typing import Optional
+from typing import Optional, Union
 from langchain_openai import ChatOpenAI
 from langchain_community.llms import Ollama
-from langchain.schema import BaseLanguageModel
 from loguru import logger
 
 from app.config import settings
@@ -17,7 +16,7 @@ class LLMFactory:
         model: Optional[str] = None,
         temperature: Optional[float] = None,
         **kwargs
-    ) -> BaseLanguageModel:
+    ) -> Union[ChatOpenAI, Ollama]:
         """
         Create LLM instance based on provider.
 
@@ -84,6 +83,6 @@ class LLMFactory:
 
 
 # Convenience function
-def get_llm(**kwargs) -> BaseLanguageModel:
+def get_llm(**kwargs) -> Union[ChatOpenAI, Ollama]:
     """Get default LLM instance."""
     return LLMFactory.create_llm(**kwargs)
