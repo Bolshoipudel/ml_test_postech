@@ -10,6 +10,8 @@ from loguru import logger
 from app.config import settings
 from app.api.routes import router
 from app.models.schemas import ErrorResponse
+from app.services.database_service import db_service
+from app.agents.sql_agent import sql_agent
 
 
 # Configure logger
@@ -30,11 +32,22 @@ async def lifespan(app: FastAPI):
     logger.info(f"LLM Provider: {settings.llm_provider}")
     logger.info(f"Vector Store: {settings.vector_store}")
 
-    # TODO: Initialize services here
-    # - Initialize database connection pool
-    # - Load vector store
-    # - Warm up LLM models
-    # - Initialize agents
+    # Initialize services
+    try:
+        logger.info("Initializing database connection...")
+        db_service.initialize()
+
+        logger.info("Initializing SQL Agent...")
+        sql_agent.initialize()
+
+        # TODO: Initialize other services
+        # - Load vector store for RAG
+        # - Initialize Web Search agent
+        # - Initialize Router agent
+
+    except Exception as e:
+        logger.error(f"Failed to initialize services: {e}")
+        logger.warning("Application started with limited functionality")
 
     logger.success("Application started successfully")
 
@@ -42,10 +55,18 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down application...")
-    # TODO: Cleanup resources here
-    # - Close database connections
-    # - Save vector store state
-    # - Cleanup temp files
+
+    # Cleanup resources
+    try:
+        logger.info("Closing database connections...")
+        db_service.close()
+
+        # TODO: Cleanup other resources
+        # - Save vector store state
+        # - Cleanup temp files
+
+    except Exception as e:
+        logger.error(f"Error during shutdown: {e}")
 
     logger.success("Application shut down successfully")
 

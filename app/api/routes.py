@@ -19,6 +19,7 @@ from app.models.schemas import (
     ToolType
 )
 from app.config import settings
+from app.agents.sql_agent import sql_agent
 
 router = APIRouter(prefix="/api/v1", tags=["api"])
 
@@ -77,14 +78,50 @@ async def chat(request: ChatRequest):
         message_lower = request.message.lower()
 
         # Simple routing logic (will be replaced with actual agent)
-        if any(keyword in message_lower for keyword in ['сколько', 'кто работает', 'команда', 'разработчик', 'инцидент', 'баг']):
-            # SQL-related query
-            tools_used.append(ToolUsage(
-                tool_type=ToolType.SQL,
-                query="Placeholder SQL query",
-                result_summary="Database query executed"
-            ))
-            response_text = "Это запрос к базе данных. (Агент SQL пока не реализован)"
+        if any(keyword in message_lower for keyword in ['сколько', 'кто работает', 'команда', 'разработчик', 'инцидент', 'баг', 'продукт', 'отдел', 'фича', 'feature']):
+            # SQL-related query - use SQL Agent
+            try:
+                logger.info(f"Routing to SQL Agent for question: {request.message}")
+
+                result = sql_agent.execute_query(request.message, validate=True)
+
+                if result["success"]:
+                    # Format results into natural language
+                    formatted_answer = sql_agent.format_results(
+                        result["results"],
+                        request.message
+                    )
+
+                    tools_used.append(ToolUsage(
+                        tool_type=ToolType.SQL,
+                        query=result["sql_query"],
+                        result_summary=f"Найдено {result['row_count']} записей",
+                        metadata={
+                            "row_count": result["row_count"],
+                            "sql_query": result["sql_query"]
+                        }
+                    ))
+                    response_text = formatted_answer
+                    sources = ["database: PostgreSQL"]
+                else:
+                    # SQL generation failed
+                    logger.warning(f"SQL Agent failed: {result.get('error')}")
+                    response_text = f"Не удалось выполнить запрос к базе данных: {result.get('error', 'Неизвестная ошибка')}"
+                    tools_used.append(ToolUsage(
+                        tool_type=ToolType.SQL,
+                        query=result.get("sql_query"),
+                        result_summary="Ошибка выполнения запроса",
+                        metadata={"error": result.get("error")}
+                    ))
+
+            except Exception as e:
+                logger.error(f"SQL Agent error: {e}")
+                response_text = f"Произошла ошибка при обработке запроса: {str(e)}"
+                tools_used.append(ToolUsage(
+                    tool_type=ToolType.SQL,
+                    result_summary="Ошибка SQL Agent",
+                    metadata={"error": str(e)}
+                ))
             sources = ["database"]
 
         elif any(keyword in message_lower for keyword in ['как работает', 'что такое', 'документация', 'инструкция']):
