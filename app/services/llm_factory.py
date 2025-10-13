@@ -1,4 +1,4 @@
-"""LLM Factory for creating LLM instances."""
+"""Фабрика LLM для создания экземпляров моделей."""
 from typing import Optional, Union
 from langchain_openai import ChatOpenAI
 from langchain_community.llms import Ollama
@@ -8,7 +8,7 @@ from app.config import settings
 
 
 class LLMFactory:
-    """Factory for creating LLM instances."""
+    """Фабрика для создания экземпляров LLM."""
 
     @staticmethod
     def create_llm(
@@ -18,16 +18,16 @@ class LLMFactory:
         **kwargs
     ) -> Union[ChatOpenAI, Ollama]:
         """
-        Create LLM instance based on provider.
+        Создание экземпляра LLM на основе провайдера.
 
         Args:
-            provider: LLM provider ('openai' or 'ollama')
-            model: Model name
-            temperature: Temperature for generation
-            **kwargs: Additional parameters
+            provider: Провайдер LLM ('openai' или 'ollama')
+            model: Название модели
+            temperature: Температура для генерации
+            **kwargs: Дополнительные параметры
 
         Returns:
-            LLM instance
+            Экземпляр LLM
         """
         provider = provider or settings.llm_provider
         temperature = temperature or settings.llm_temperature
@@ -47,7 +47,6 @@ class LLMFactory:
         temperature: float = 0.7,
         **kwargs
     ) -> ChatOpenAI:
-        """Create OpenAI LLM instance."""
         model = model or settings.llm_model
 
         if not settings.openai_api_key:
@@ -69,7 +68,6 @@ class LLMFactory:
         temperature: float = 0.7,
         **kwargs
     ) -> Ollama:
-        """Create Ollama LLM instance."""
         model = model or settings.ollama_model
 
         logger.info(f"Creating Ollama LLM with model: {model}")
@@ -82,7 +80,6 @@ class LLMFactory:
         )
 
 
-# Convenience function
 def get_llm(**kwargs) -> Union[ChatOpenAI, Ollama]:
-    """Get default LLM instance."""
+    """Получение экземпляра LLM по умолчанию."""
     return LLMFactory.create_llm(**kwargs)

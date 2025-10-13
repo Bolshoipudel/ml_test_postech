@@ -1,4 +1,4 @@
-"""Main entry point for the LLM Assistant application."""
+"""Точка входа для приложения LLM Assistant."""
 import sys
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
@@ -13,9 +13,9 @@ from app.models.schemas import ErrorResponse
 from app.services.database_service import db_service
 from app.agents.sql_agent import sql_agent
 from app.agents.rag_agent import rag_agent
+from app.agents.web_search_agent import web_search_agent
 
 
-# Configure logger
 logger.remove()
 logger.add(
     sys.stderr,
@@ -26,14 +26,12 @@ logger.add(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Lifespan context manager for startup and shutdown events."""
-    # Startup
+    """Управление жизненным циклом приложения."""
     logger.info(f"Starting {settings.app_name} v{settings.app_version}")
     logger.info(f"Environment: {'DEBUG' if settings.debug else 'PRODUCTION'}")
     logger.info(f"LLM Provider: {settings.llm_provider}")
     logger.info(f"Vector Store: {settings.vector_store}")
 
-    # Initialize services
     try:
         logger.info("Initializing database connection...")
         db_service.initialize()
@@ -44,9 +42,10 @@ async def lifespan(app: FastAPI):
         logger.info("Initializing RAG Agent...")
         rag_agent.initialize(load_docs=True, docs_directory="./data/docs")
 
-        # TODO: Initialize other services
-        # - Initialize Web Search agent
-        # - Initialize Router agent
+        logger.info("Initializing Web Search Agent...")
+        web_search_agent.initialize()
+
+        # TODO: Инициализировать Router agent
 
     except Exception as e:
         logger.error(f"Failed to initialize services: {e}")
@@ -56,17 +55,13 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Shutdown
     logger.info("Shutting down application...")
 
-    # Cleanup resources
     try:
         logger.info("Closing database connections...")
         db_service.close()
 
-        # TODO: Cleanup other resources
-        # - Save vector store state
-        # - Cleanup temp files
+        # TODO: Сохранить состояние vector store, очистить временные файлы
 
     except Exception as e:
         logger.error(f"Error during shutdown: {e}")
@@ -74,7 +69,6 @@ async def lifespan(app: FastAPI):
     logger.success("Application shut down successfully")
 
 
-# Create FastAPI application
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
@@ -85,20 +79,17 @@ app = FastAPI(
 )
 
 
-# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TODO: Configure properly for production
+    allow_origins=["*"],  # TODO: Настроить для production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-# Exception handlers
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    """Handle validation errors."""
     logger.error(f"Validation error: {exc.errors()}")
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -111,7 +102,6 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
-    """Handle general exceptions."""
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -122,13 +112,11 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 
-# Include API routes
 app.include_router(router)
 
 
 @app.get("/", tags=["root"])
 async def root():
-    """Root endpoint."""
     return {
         "name": settings.app_name,
         "version": settings.app_version,
@@ -139,7 +127,6 @@ async def root():
 
 
 def main():
-    """Main application entry point for running with uvicorn."""
     import uvicorn
 
     logger.info(f"Starting uvicorn server on {settings.api_host}:{settings.api_port}")

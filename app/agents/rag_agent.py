@@ -1,4 +1,4 @@
-"""RAG Agent for answering questions based on documentation."""
+"""RAG-агент для ответов на вопросы по документации."""
 from typing import Dict, Any, List, Optional
 from loguru import logger
 
@@ -7,37 +7,32 @@ from app.services.llm_factory import get_llm
 
 
 class RAGAgent:
-    """Agent for answering questions using RAG (Retrieval-Augmented Generation)."""
+    """Агент для ответов на вопросы с использованием RAG (Retrieval-Augmented Generation)."""
 
     def __init__(self):
-        """Initialize RAG Agent."""
         self.rag_service = None
         self.llm = None
         self._initialized = False
 
     def initialize(self, load_docs: bool = True, docs_directory: str = "./data/docs"):
-        """
-        Initialize the agent.
+        """Инициализация RAG-агента.
 
         Args:
-            load_docs: Whether to load documents on initialization
-            docs_directory: Directory containing documents
+            load_docs: Загружать ли документы при инициализации
+            docs_directory: Директория с документами
         """
         try:
             logger.info("Initializing RAG Agent...")
 
-            # Initialize RAG service
             if not rag_service._initialized:
                 rag_service.initialize()
             self.rag_service = rag_service
 
-            # Load documents if requested
             if load_docs:
                 logger.info(f"Loading documents from {docs_directory}...")
                 self.rag_service.load_documents(docs_directory)
 
-            # Get LLM
-            self.llm = get_llm(temperature=0.3)  # Lower temperature for more factual responses
+            self.llm = get_llm(temperature=0.3)
 
             self._initialized = True
             logger.success("RAG Agent initialized successfully")
@@ -53,15 +48,15 @@ class RAGAgent:
         min_relevance_score: float = 0.3
     ) -> Dict[str, Any]:
         """
-        Answer a question based on retrieved documents.
+        Ответ на вопрос на основе найденных документов.
 
         Args:
-            question: User's question
-            top_k: Number of documents to retrieve
-            min_relevance_score: Minimum relevance score (0-1)
+            question: Вопрос пользователя
+            top_k: Количество документов для поиска
+            min_relevance_score: Минимальный порог релевантности (0-1)
 
         Returns:
-            Dictionary with answer and metadata
+            Словарь с ответом и метаданными
         """
         if not self._initialized:
             self.initialize()
@@ -69,7 +64,7 @@ class RAGAgent:
         try:
             logger.info(f"RAG Agent processing question: {question}")
 
-            # Search for relevant documents
+            # Поиск релевантных документов
             retrieved_docs = self.rag_service.search(query=question, top_k=top_k)
 
             if not retrieved_docs:
@@ -80,10 +75,9 @@ class RAGAgent:
                     "retrieved_chunks": 0
                 }
 
-            # Filter by relevance score (distance metric from ChromaDB)
-            # ChromaDB uses different distance metrics depending on configuration
-            # For cosine: distance = 1 - cosine_similarity, range approximately [0, 2]
-            # We convert distance to similarity score [0, 1] where 1 is perfect match
+            # Фильтрация по релевантности
+            # ChromaDB возвращает distance: для косинусной метрики distance = 1 - cosine_similarity
+            # Преобразуем distance в similarity [0, 1], где 1 - идеальное совпадение
             filtered_docs = []
 
             logger.info(f"Retrieved {len(retrieved_docs)} documents before filtering")
@@ -91,9 +85,7 @@ class RAGAgent:
             for doc in retrieved_docs:
                 distance = doc['distance']
 
-                # Convert distance to similarity score
-                # For cosine distance: similarity = 1 - distance
-                # Clamp to [0, 1] range to handle edge cases
+                # Преобразование distance в similarity с ограничением диапазона [0, 1]
                 similarity = max(0.0, min(1.0, 1.0 - distance))
 
                 doc['similarity'] = similarity
@@ -108,7 +100,7 @@ class RAGAgent:
                        f"with min_relevance={min_relevance_score}")
 
             if not filtered_docs:
-                # Fallback: use top document even if below threshold
+                # Резервный вариант: используем лучший документ даже если ниже порога
                 if retrieved_docs:
                     logger.warning(f"No documents passed threshold {min_relevance_score:.2f}, "
                                   f"using top document as fallback (similarity={retrieved_docs[0].get('similarity', 0):.2f})")
@@ -121,13 +113,13 @@ class RAGAgent:
                         "retrieved_chunks": 0
                     }
 
-            # Format context from retrieved documents
+            # Формирование контекста из документов
             context = self._format_context(filtered_docs)
 
-            # Generate answer using LLM
+            # Генерация ответа через LLM
             answer = self._generate_answer(question, context)
 
-            # Extract sources
+            # Извлечение источников
             sources = self._extract_sources(filtered_docs)
 
             logger.success(f"Generated answer using {len(filtered_docs)} relevant documents")
@@ -152,13 +144,13 @@ class RAGAgent:
 
     def _format_context(self, documents: List[Dict[str, Any]]) -> str:
         """
-        Format retrieved documents into context for LLM.
+        Форматирование найденных документов в контекст для LLM.
 
         Args:
-            documents: List of retrieved documents
+            documents: Список найденных документов
 
         Returns:
-            Formatted context string
+            Отформатированная строка контекста
         """
         context_parts = []
 
@@ -175,14 +167,14 @@ class RAGAgent:
 
     def _generate_answer(self, question: str, context: str) -> str:
         """
-        Generate answer using LLM with retrieved context.
+        Генерация ответа с использованием LLM и контекста.
 
         Args:
-            question: User's question
-            context: Retrieved context
+            question: Вопрос пользователя
+            context: Извлеченный контекст
 
         Returns:
-            Generated answer
+            Сгенерированный ответ
         """
         prompt = f"""Ты - эксперт по продуктам Positive Technologies. Ответь на вопрос пользователя на основе предоставленной документации.
 
@@ -213,13 +205,13 @@ class RAGAgent:
 
     def _extract_sources(self, documents: List[Dict[str, Any]]) -> List[str]:
         """
-        Extract unique sources from documents.
+        Извлечение уникальных источников из документов.
 
         Args:
-            documents: List of documents
+            documents: Список документов
 
         Returns:
-            List of unique source identifiers
+            Список уникальных источников
         """
         sources = set()
 
@@ -232,10 +224,10 @@ class RAGAgent:
 
     def get_collection_info(self) -> Dict[str, Any]:
         """
-        Get information about the document collection.
+        Получение информации о коллекции документов.
 
         Returns:
-            Collection statistics
+            Статистика коллекции
         """
         if not self._initialized:
             self.initialize(load_docs=False)
@@ -244,10 +236,10 @@ class RAGAgent:
 
     def reload_documents(self, directory: str = "./data/docs"):
         """
-        Reload documents from directory.
+        Перезагрузка документов из директории.
 
         Args:
-            directory: Directory containing documents
+            directory: Директория с документами
         """
         if not self._initialized:
             self.initialize(load_docs=False)
@@ -257,5 +249,5 @@ class RAGAgent:
         logger.success("Documents reloaded successfully")
 
 
-# Global RAG agent instance
+# Глобальный экземпляр RAG-агента
 rag_agent = RAGAgent()

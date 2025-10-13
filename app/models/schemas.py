@@ -1,4 +1,4 @@
-"""Pydantic models for API requests and responses."""
+"""Pydantic модели для API запросов и ответов."""
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from enum import Enum
@@ -6,37 +6,38 @@ from pydantic import BaseModel, Field
 
 
 class MessageRole(str, Enum):
-    """Message role in chat."""
     USER = "user"
     ASSISTANT = "assistant"
     SYSTEM = "system"
 
 
 class ToolType(str, Enum):
-    """Type of tool used by the agent."""
     RAG = "rag"
     SQL = "sql"
     WEB_SEARCH = "web_search"
+    ROUTER = "router"
+    MULTIPLE = "multiple"
     NONE = "none"
 
 
 class Message(BaseModel):
-    """Chat message."""
     role: MessageRole
     content: str
     timestamp: Optional[datetime] = Field(default_factory=datetime.now)
 
 
 class ToolUsage(BaseModel):
-    """Information about tool usage."""
+    """Информация об использовании инструмента."""
     tool_type: ToolType
     query: Optional[str] = None
     result_summary: Optional[str] = None
+    reasoning: Optional[str] = None  # Обоснование решения роутера
+    confidence: Optional[float] = None  # Уверенность роутера
     metadata: Optional[Dict[str, Any]] = None
 
 
 class ChatRequest(BaseModel):
-    """Request model for chat endpoint."""
+    """Модель запроса для чат-эндпоинта."""
     message: str = Field(..., description="User message", min_length=1)
     session_id: Optional[str] = Field(None, description="Session ID for conversation history")
     use_history: bool = Field(True, description="Whether to use conversation history")
@@ -52,7 +53,7 @@ class ChatRequest(BaseModel):
 
 
 class ChatResponse(BaseModel):
-    """Response model for chat endpoint."""
+    """Модель ответа для чат-эндпоинта."""
     message: str = Field(..., description="Assistant response")
     session_id: str = Field(..., description="Session ID")
     tools_used: List[ToolUsage] = Field(default_factory=list, description="Tools used to generate response")
@@ -77,7 +78,6 @@ class ChatResponse(BaseModel):
 
 
 class HealthResponse(BaseModel):
-    """Health check response."""
     status: str = "healthy"
     version: str
     timestamp: datetime = Field(default_factory=datetime.now)
@@ -85,7 +85,6 @@ class HealthResponse(BaseModel):
 
 
 class FeedbackRequest(BaseModel):
-    """Feedback request model."""
     session_id: str
     message_id: Optional[str] = None
     rating: int = Field(..., ge=1, le=5, description="Rating from 1 to 5")
@@ -93,20 +92,17 @@ class FeedbackRequest(BaseModel):
 
 
 class FeedbackResponse(BaseModel):
-    """Feedback response model."""
     success: bool
     message: str
 
 
 class ChatHistory(BaseModel):
-    """Chat history response."""
     session_id: str
     messages: List[Message]
     total_messages: int
 
 
 class ErrorResponse(BaseModel):
-    """Error response model."""
     error: str
     detail: Optional[str] = None
     timestamp: datetime = Field(default_factory=datetime.now)

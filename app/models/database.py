@@ -1,4 +1,4 @@
-"""SQLAlchemy database models."""
+"""SQLAlchemy модели базы данных."""
 from datetime import datetime, date
 from typing import List
 from sqlalchemy import (
@@ -12,7 +12,6 @@ Base = declarative_base()
 
 
 class Department(Base):
-    """Department model."""
     __tablename__ = "departments"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -21,13 +20,11 @@ class Department(Base):
     head_name = Column(String(100))
     created_at = Column(TIMESTAMP, default=datetime.utcnow)
 
-    # Relationships
     products = relationship("Product", back_populates="department")
     team_members = relationship("TeamMember", back_populates="department")
 
 
 class Product(Base):
-    """Product model."""
     __tablename__ = "products"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -40,14 +37,12 @@ class Product(Base):
     release_date = Column(Date)
     created_at = Column(TIMESTAMP, default=datetime.utcnow)
 
-    # Relationships
     department = relationship("Department", back_populates="products")
     features = relationship("Feature", back_populates="product")
     incidents = relationship("Incident", back_populates="product")
 
 
 class TeamMember(Base):
-    """Team member model."""
     __tablename__ = "team_members"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -62,7 +57,6 @@ class TeamMember(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(TIMESTAMP, default=datetime.utcnow)
 
-    # Relationships
     department = relationship("Department", back_populates="team_members")
     assigned_features = relationship("Feature", back_populates="assigned_member")
     reported_incidents = relationship(
@@ -78,7 +72,6 @@ class TeamMember(Base):
 
 
 class Feature(Base):
-    """Feature model."""
     __tablename__ = "features"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -95,13 +88,11 @@ class Feature(Base):
     created_at = Column(TIMESTAMP, default=datetime.utcnow)
     updated_at = Column(TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Relationships
     product = relationship("Product", back_populates="features")
     assigned_member = relationship("TeamMember", back_populates="assigned_features")
 
 
 class Incident(Base):
-    """Incident model."""
     __tablename__ = "incidents"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -117,7 +108,6 @@ class Incident(Base):
     created_at = Column(TIMESTAMP, default=datetime.utcnow)
     updated_at = Column(TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Relationships
     product = relationship("Product", back_populates="incidents")
     reporter = relationship(
         "TeamMember",

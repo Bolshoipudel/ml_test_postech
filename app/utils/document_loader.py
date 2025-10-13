@@ -1,4 +1,4 @@
-"""Document loader utilities for RAG system."""
+"""Утилиты загрузчика документов для RAG-системы."""
 import os
 from typing import List, Dict, Any
 from pathlib import Path
@@ -6,15 +6,13 @@ from loguru import logger
 
 
 class Document:
-    """Simple document class to hold text and metadata."""
+    """Класс документа для хранения текста и метаданных."""
 
     def __init__(self, page_content: str, metadata: Dict[str, Any] = None):
         """
-        Initialize document.
-
         Args:
-            page_content: The text content
-            metadata: Optional metadata dictionary
+            page_content: Текстовое содержимое
+            metadata: Опциональный словарь метаданных
         """
         self.page_content = page_content
         self.metadata = metadata or {}
@@ -24,21 +22,20 @@ class Document:
 
 
 class DocumentLoader:
-    """Loader for various document types."""
+    """Загрузчик для различных типов документов."""
 
     def __init__(self):
-        """Initialize document loader."""
         self.supported_extensions = ['.md', '.txt', '.text']
 
     def load_file(self, file_path: str) -> Document:
         """
-        Load a single document from file.
+        Загрузка одного документа из файла.
 
         Args:
-            file_path: Path to the file
+            file_path: Путь к файлу
 
         Returns:
-            Document object
+            Объект Document
         """
         path = Path(file_path)
 
@@ -70,14 +67,14 @@ class DocumentLoader:
 
     def load_directory(self, directory_path: str, recursive: bool = True) -> List[Document]:
         """
-        Load all documents from a directory.
+        Загрузка всех документов из директории.
 
         Args:
-            directory_path: Path to the directory
-            recursive: Whether to search subdirectories
+            directory_path: Путь к директории
+            recursive: Искать ли в поддиректориях
 
         Returns:
-            List of Document objects
+            Список объектов Document
         """
         path = Path(directory_path)
 
@@ -89,7 +86,7 @@ class DocumentLoader:
 
         documents = []
 
-        # Get all files with supported extensions
+        # Получение всех файлов с поддерживаемыми расширениями
         if recursive:
             pattern = "**/*"
         else:
@@ -111,28 +108,26 @@ class DocumentLoader:
 
 
 class TextSplitter:
-    """Split documents into chunks for better retrieval."""
+    """Разбиение документов на чанки для улучшения поиска."""
 
     def __init__(self, chunk_size: int = 1000, chunk_overlap: int = 200):
         """
-        Initialize text splitter.
-
         Args:
-            chunk_size: Maximum size of each chunk in characters
-            chunk_overlap: Number of characters to overlap between chunks
+            chunk_size: Максимальный размер чанка в символах
+            chunk_overlap: Количество символов перекрытия между чанками
         """
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
 
     def split_text(self, text: str) -> List[str]:
         """
-        Split text into chunks.
+        Разбиение текста на чанки.
 
         Args:
-            text: Text to split
+            text: Текст для разбиения
 
         Returns:
-            List of text chunks
+            Список текстовых чанков
         """
         if len(text) <= self.chunk_size:
             return [text]
@@ -143,19 +138,19 @@ class TextSplitter:
         while start < len(text):
             end = start + self.chunk_size
 
-            # If not at the end, try to break at a good point
+            # Попытка разбить в удобном месте
             if end < len(text):
-                # Try to break at paragraph
+                # Попытка разбить на параграфе
                 paragraph_break = text.rfind('\n\n', start, end)
                 if paragraph_break != -1 and paragraph_break > start:
                     end = paragraph_break
                 else:
-                    # Try to break at newline
+                    # Попытка разбить на новой строке
                     newline_break = text.rfind('\n', start, end)
                     if newline_break != -1 and newline_break > start:
                         end = newline_break
                     else:
-                        # Try to break at sentence
+                        # Попытка разбить на предложении
                         sentence_break = max(
                             text.rfind('. ', start, end),
                             text.rfind('! ', start, end),
@@ -168,7 +163,7 @@ class TextSplitter:
             if chunk:
                 chunks.append(chunk)
 
-            # Move start forward, accounting for overlap
+            # Смещение начала с учетом перекрытия
             start = end - self.chunk_overlap if end < len(text) else end
 
         logger.debug(f"Split text into {len(chunks)} chunks")
@@ -177,13 +172,13 @@ class TextSplitter:
 
     def split_documents(self, documents: List[Document]) -> List[Document]:
         """
-        Split documents into chunks.
+        Разбиение документов на чанки.
 
         Args:
-            documents: List of documents to split
+            documents: Список документов для разбиения
 
         Returns:
-            List of chunked documents
+            Список разбитых документов
         """
         chunked_documents = []
 
@@ -204,30 +199,29 @@ class TextSplitter:
         return chunked_documents
 
 
-# Helper functions
 def load_documents_from_directory(directory: str, chunk_size: int = 1000, chunk_overlap: int = 200) -> List[Document]:
     """
-    Load and chunk documents from a directory.
+    Загрузка и разбиение документов из директории.
 
     Args:
-        directory: Directory path
-        chunk_size: Size of chunks
-        chunk_overlap: Overlap between chunks
+        directory: Путь к директории
+        chunk_size: Размер чанков
+        chunk_overlap: Перекрытие между чанками
 
     Returns:
-        List of chunked documents
+        Список разбитых документов
     """
     loader = DocumentLoader()
     splitter = TextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
-    # Load documents
+    # Загрузка документов
     documents = loader.load_directory(directory, recursive=True)
 
     if not documents:
         logger.warning(f"No documents found in {directory}")
         return []
 
-    # Split into chunks
+    # Разбиение на чанки
     chunked_docs = splitter.split_documents(documents)
 
     return chunked_docs

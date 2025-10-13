@@ -1,4 +1,4 @@
-"""Database service for executing SQL queries."""
+"""Сервис базы данных для выполнения SQL-запросов."""
 from typing import List, Dict, Any, Optional
 import re
 from sqlalchemy import create_engine, text, inspect
@@ -11,16 +11,14 @@ from app.models.database import Base
 
 
 class DatabaseService:
-    """Service for database operations."""
+    """Сервис для операций с базой данных."""
 
     def __init__(self):
-        """Initialize database connection."""
         self.engine = None
         self.SessionLocal = None
         self._initialized = False
 
     def initialize(self):
-        """Create database engine and session."""
         try:
             logger.info(f"Connecting to database: {settings.postgres_host}:{settings.postgres_port}")
 
@@ -37,7 +35,7 @@ class DatabaseService:
                 bind=self.engine
             )
 
-            # Test connection
+            # Тестирование соединения
             with self.engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
 
@@ -49,20 +47,19 @@ class DatabaseService:
             raise
 
     def get_session(self) -> Session:
-        """Get database session."""
         if not self._initialized:
             self.initialize()
         return self.SessionLocal()
 
     def execute_query(self, query: str) -> List[Dict[str, Any]]:
         """
-        Execute a SQL query and return results as list of dicts.
+        Выполнение SQL-запроса с возвратом результатов как список словарей.
 
         Args:
-            query: SQL query string
+            query: SQL-запрос
 
         Returns:
-            List of dictionaries with query results
+            Список словарей с результатами запроса
         """
         if not self._initialized:
             self.initialize()
@@ -71,7 +68,7 @@ class DatabaseService:
             with self.engine.connect() as conn:
                 result = conn.execute(text(query))
 
-                # Convert to list of dicts
+                # Преобразование в список словарей
                 columns = result.keys()
                 rows = []
                 for row in result:
@@ -86,13 +83,13 @@ class DatabaseService:
 
     def get_table_schema(self, table_name: Optional[str] = None) -> Dict[str, Any]:
         """
-        Get database schema information.
+        Получение информации о схеме базы данных.
 
         Args:
-            table_name: Optional specific table name
+            table_name: Опциональное имя конкретной таблицы
 
         Returns:
-            Dictionary with schema information
+            Словарь с информацией о схеме
         """
         if not self._initialized:
             self.initialize()
@@ -100,7 +97,7 @@ class DatabaseService:
         inspector = inspect(self.engine)
 
         if table_name:
-            # Get specific table schema
+            # Получение схемы конкретной таблицы
             columns = inspector.get_columns(table_name)
             foreign_keys = inspector.get_foreign_keys(table_name)
 
@@ -110,7 +107,7 @@ class DatabaseService:
                 "foreign_keys": foreign_keys
             }
         else:
-            # Get all tables schema
+            # Получение схемы всех таблиц
             tables = inspector.get_table_names()
             schema = {}
 
@@ -135,10 +132,10 @@ class DatabaseService:
 
     def get_table_info_for_llm(self) -> str:
         """
-        Get formatted table information for LLM context.
+        Получение отформатированной информации о таблицах для контекста LLM.
 
         Returns:
-            Formatted string with table schemas
+            Отформатированная строка со схемами таблиц
         """
         schema = self.get_table_schema()
 
@@ -165,30 +162,29 @@ class DatabaseService:
 
     def validate_query(self, query: str) -> tuple[bool, str]:
         """
-        Validate SQL query (Guardrails).
+        Валидация SQL-запроса (Guardrails).
 
         Args:
-            query: SQL query string
+            query: SQL-запрос
 
         Returns:
-            Tuple of (is_valid, error_message)
+            Кортеж (is_valid, error_message)
         """
         query_stripped = query.strip()
         query_upper = query_stripped.upper()
 
-        # Check if query is empty
+        # Проверка на пустой запрос
         if not query_stripped:
             return False, "Query cannot be empty"
 
-        # Check 1: First word must be from allowed operations
+        # Проверка 1: Первое слово должно быть из разрешенных операций
         first_word = query_stripped.split()[0].upper()
         allowed_ops = settings.allowed_sql_ops_list
 
         if first_word not in allowed_ops:
             return False, f"Query must start with one of: {', '.join(allowed_ops)}. Got: {first_word}"
 
-        # Check 2: Look for dangerous SQL commands as whole words
-        # Using word boundaries \b to avoid false positives like "created_at"
+        # Проверка 2: Поиск опасных команд SQL (word boundaries для точности)
         dangerous_commands = [
             r'\bDELETE\b', r'\bDROP\b', r'\bTRUNCATE\b',
             r'\bALTER\b', r'\bCREATE\b', r'\bINSERT\b',
@@ -198,13 +194,12 @@ class DatabaseService:
 
         for pattern in dangerous_commands:
             if re.search(pattern, query_upper):
-                # Extract command name from pattern
                 cmd = pattern.strip(r'\b').strip('\\')
-                # Check if it's actually allowed
+                # Проверка, действительно ли команда разрешена
                 if cmd not in allowed_ops:
                     return False, f"Dangerous operation '{cmd}' detected in query. Only {', '.join(allowed_ops)} operations are permitted."
 
-        # Check 3: Look for dangerous stored procedure patterns
+        # Проверка 3: Поиск опасных паттернов stored procedures
         dangerous_patterns = [
             (r'xp_', 'xp_'),
             (r'sp_', 'sp_'),
@@ -214,9 +209,8 @@ class DatabaseService:
             if re.search(pattern, query_upper):
                 return False, f"Dangerous pattern '{name}' detected in query"
 
-        # Check 4: Prevent SQL injection attempts with multiple statements
-        # Look for semicolons that might indicate multiple statements
-        # But allow semicolon at the end
+        # Проверка 4: Защита от SQL-инъекций через множественные выражения
+        # Допускается точка с запятой только в конце
         semicolon_count = query_stripped.count(';')
         if semicolon_count > 1:
             return False, "Multiple SQL statements are not allowed"
@@ -226,11 +220,10 @@ class DatabaseService:
         return True, "Query is valid"
 
     def close(self):
-        """Close database connection."""
         if self.engine:
             self.engine.dispose()
             logger.info("Database connection closed")
 
 
-# Global database service instance
+# Глобальный экземпляр сервиса базы данных
 db_service = DatabaseService()

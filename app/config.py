@@ -4,60 +4,60 @@ from functools import lru_cache
 
 
 class Settings(BaseSettings):
-    """Application settings loaded from environment variables."""
-    
-    # Application
+    """Настройки приложения из переменных окружения."""
+
+    # Приложение
     app_name: str = "LLM Assistant"
     app_version: str = "1.0.0"
     debug: bool = False
     log_level: str = "INFO"
-    
-    # API Configuration
+
+    # API
     api_host: str = "0.0.0.0"
     api_port: int = 8000
     api_workers: int = 1
-    
-    # API Keys
+
+    # API ключи
     openai_api_key: Optional[str] = None
     tavily_api_key: Optional[str] = None
-    
-    # LLM Configuration
-    llm_provider: str = "openai"  # openai, ollama
-    llm_model: str = "gpt-3.5-turbo"
+
+    # LLM
+    llm_provider: str = "openai"
+    llm_model: str = "gpt-4.1"
     llm_temperature: float = 0.7
     llm_max_tokens: int = 2000
-    
-    # Ollama Configuration
+
+    # Ollama
     ollama_base_url: str = "http://localhost:11434"
-    ollama_model: str = "llama2"
-    
-    # Embedding Configuration
-    embedding_provider: str = "openai"  # openai, sentence-transformers
-    embedding_model: str = "text-embedding-ada-002"
-    
-    # Vector Store Configuration
-    vector_store: str = "chroma"  # chroma, faiss
+    ollama_model: str = "llama3"
+
+    # Эмбеддинги
+    embedding_provider: str = "openai"
+    embedding_model: str = "text-embedding-3-small"
+
+    # Векторное хранилище
+    vector_store: str = "chroma"
     chroma_persist_directory: str = "./chroma_db"
     chunk_size: int = 1000
     chunk_overlap: int = 200
-    
-    # Database Configuration
+
+    # База данных
     postgres_user: str = "llm_assistant"
     postgres_password: str = "secure_password"
     postgres_db: str = "llm_assistant_db"
     postgres_host: str = "localhost"
     postgres_port: int = 5432
     database_url: Optional[str] = None
-    
-    # Web Search Configuration
+
+    # Веб-поиск
     web_search_enabled: bool = True
     max_search_results: int = 5
-    
-    # Agent Configuration
+
+    # Агенты
     agent_max_iterations: int = 5
     agent_timeout: int = 30
-    
-    # Guardrails Configuration
+
+    # Безопасность
     enable_guardrails: bool = True
     allowed_sql_operations: str = "SELECT"
     
@@ -67,7 +67,6 @@ class Settings(BaseSettings):
         
     @property
     def db_url(self) -> str:
-        """Construct database URL if not provided."""
         if self.database_url:
             return self.database_url
         return (
@@ -77,15 +76,13 @@ class Settings(BaseSettings):
     
     @property
     def allowed_sql_ops_list(self) -> List[str]:
-        """Convert allowed SQL operations string to list."""
         return [op.strip().upper() for op in self.allowed_sql_operations.split(",")]
 
 
 @lru_cache()
 def get_settings() -> Settings:
-    """Get cached settings instance."""
     return Settings()
 
 
-# Global settings instance
+# Глобальный экземпляр
 settings = get_settings()

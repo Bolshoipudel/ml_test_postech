@@ -19,6 +19,9 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+QUICKSTART.md
+SQL_AGENT_EXAMPLES.md
+TESTING_GUIDE.md
 
 # Virtual Environment
 venv/

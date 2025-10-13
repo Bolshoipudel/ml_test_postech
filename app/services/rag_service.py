@@ -1,4 +1,4 @@
-"""RAG (Retrieval-Augmented Generation) service for document search."""
+"""Сервис RAG (Retrieval-Augmented Generation) для поиска по документам."""
 from typing import List, Dict, Any, Optional
 import os
 from pathlib import Path
@@ -13,25 +13,23 @@ from app.utils.document_loader import Document, load_documents_from_directory
 
 
 class RAGService:
-    """Service for document retrieval using vector similarity search."""
+    """Сервис для поиска документов через векторное сходство."""
 
     def __init__(self):
-        """Initialize RAG service."""
         self.client = None
         self.collection = None
         self.embedding_function = None
         self._initialized = False
 
     def initialize(self):
-        """Initialize ChromaDB and embedding function."""
         try:
             logger.info("Initializing RAG Service...")
 
-            # Create persist directory if it doesn't exist
+            # Создание директории для хранения
             persist_directory = settings.chroma_persist_directory
             Path(persist_directory).mkdir(parents=True, exist_ok=True)
 
-            # Initialize ChromaDB client
+            # Инициализация ChromaDB клиента
             self.client = chromadb.PersistentClient(
                 path=persist_directory,
                 settings=Settings(
@@ -40,7 +38,7 @@ class RAGService:
                 )
             )
 
-            # Initialize embedding function
+            # Инициализация embedding функции
             if settings.embedding_provider == "openai":
                 if not settings.openai_api_key:
                     raise ValueError("OpenAI API key is required for embeddings")
@@ -51,13 +49,13 @@ class RAGService:
                 )
                 logger.info(f"Using OpenAI embeddings: {settings.embedding_model}")
             else:
-                # Default to sentence-transformers
+                # По умолчанию sentence-transformers
                 self.embedding_function = embedding_functions.SentenceTransformerEmbeddingFunction(
                     model_name="all-MiniLM-L6-v2"
                 )
                 logger.info("Using SentenceTransformer embeddings: all-MiniLM-L6-v2")
 
-            # Get or create collection
+            # Получение или создание коллекции
             try:
                 self.collection = self.client.get_collection(
                     name="documents",
@@ -81,23 +79,23 @@ class RAGService:
 
     def load_documents(self, directory: str, force_reload: bool = False):
         """
-        Load documents from directory into vector store.
+        Загрузка документов из директории в векторное хранилище.
 
         Args:
-            directory: Directory containing documents
-            force_reload: If True, clear existing documents and reload
+            directory: Директория с документами
+            force_reload: Если True, очистить существующие документы и перезагрузить
         """
         if not self._initialized:
             self.initialize()
 
         try:
-            # Check if documents already loaded
+            # Проверка уже загруженных документов
             if self.collection.count() > 0 and not force_reload:
                 logger.info(f"Collection already contains {self.collection.count()} documents. Skipping load.")
                 logger.info("Use force_reload=True to reload documents")
                 return
 
-            # Clear collection if force reload
+            # Очистка коллекции при принудительной перезагрузке
             if force_reload and self.collection.count() > 0:
                 logger.warning("Force reload: clearing existing documents")
                 self.client.delete_collection("documents")
@@ -107,7 +105,7 @@ class RAGService:
                     metadata={"description": "PT Products documentation"}
                 )
 
-            # Load and chunk documents
+            # Загрузка и разбиение документов
             logger.info(f"Loading documents from {directory}...")
             documents = load_documents_from_directory(
                 directory,
@@ -119,7 +117,7 @@ class RAGService:
                 logger.warning("No documents found to load")
                 return
 
-            # Prepare data for ChromaDB
+            # Подготовка данных для ChromaDB
             ids = []
             texts = []
             metadatas = []
@@ -129,7 +127,7 @@ class RAGService:
                 texts.append(doc.page_content)
                 metadatas.append(doc.metadata)
 
-            # Add documents to collection in batches
+            # Добавление документов батчами
             batch_size = 100
             for i in range(0, len(documents), batch_size):
                 batch_end = min(i + batch_size, len(documents))
@@ -153,28 +151,28 @@ class RAGService:
         filter_metadata: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
         """
-        Search for relevant documents using vector similarity.
+        Поиск релевантных документов через векторное сходство.
 
         Args:
-            query: Search query
-            top_k: Number of results to return
-            filter_metadata: Optional metadata filters
+            query: Поисковый запрос
+            top_k: Количество результатов для возврата
+            filter_metadata: Опциональные фильтры по метаданным
 
         Returns:
-            List of relevant documents with scores
+            Список релевантных документов со scores
         """
         if not self._initialized:
             self.initialize()
 
         try:
-            # Perform similarity search
+            # Поиск по сходству
             results = self.collection.query(
                 query_texts=[query],
                 n_results=top_k,
                 where=filter_metadata
             )
 
-            # Format results
+            # Форматирование результатов
             documents = []
             if results and results['documents'] and len(results['documents']) > 0:
                 for i in range(len(results['documents'][0])):
@@ -200,23 +198,23 @@ class RAGService:
         metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """
-        Add a single document to the vector store.
+        Добавление одного документа в векторное хранилище.
 
         Args:
-            content: Document content
-            metadata: Optional metadata
+            content: Содержимое документа
+            metadata: Опциональные метаданные
 
         Returns:
-            Document ID
+            ID документа
         """
         if not self._initialized:
             self.initialize()
 
         try:
-            # Generate ID
+            # Генерация ID
             doc_id = f"doc_{self.collection.count()}"
 
-            # Add document
+            # Добавление документа
             self.collection.add(
                 ids=[doc_id],
                 documents=[content],
@@ -233,10 +231,10 @@ class RAGService:
 
     def delete_document(self, doc_id: str):
         """
-        Delete a document from the vector store.
+        Удаление документа из векторного хранилища.
 
         Args:
-            doc_id: Document ID to delete
+            doc_id: ID документа для удаления
         """
         if not self._initialized:
             self.initialize()
@@ -251,10 +249,10 @@ class RAGService:
 
     def get_collection_stats(self) -> Dict[str, Any]:
         """
-        Get statistics about the document collection.
+        Получение статистики коллекции документов.
 
         Returns:
-            Dictionary with collection statistics
+            Словарь со статистикой коллекции
         """
         if not self._initialized:
             self.initialize()
@@ -266,7 +264,6 @@ class RAGService:
         }
 
     def clear_collection(self):
-        """Clear all documents from the collection."""
         if not self._initialized:
             self.initialize()
 
@@ -284,5 +281,5 @@ class RAGService:
             raise
 
 
-# Global RAG service instance
+# Глобальный экземпляр RAG-сервиса
 rag_service = RAGService()

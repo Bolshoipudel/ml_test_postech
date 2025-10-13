@@ -40,7 +40,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./data/sql:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      test: ["CMD-SHELL", "pg_isready -U llm_assistant -d llm_assistant_db"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -48,8 +48,7 @@ services:
       - llm-network
     restart: unless-stopped
 
-  # Ollama (Optional - for local LLM)
-  # Uncomment to use local LLMs
+  # Ollama
   # ollama:
   #   image: ollama/ollama:latest
   #   container_name: llm-assistant-ollama
@@ -61,8 +60,7 @@ services:
   #     - llm-network
   #   restart: unless-stopped
 
-  # pgAdmin (Optional - for database management)
-  # Uncomment if you want a web UI for PostgreSQL
+  # pgAdmin 
   # pgadmin:
   #   image: dpage/pgadmin4:latest
   #   container_name: llm-assistant-pgadmin
@@ -73,7 +71,6 @@ services:
   #     - "5050:80"
   #   networks:
   #     - llm-network
-  #   restart: unless-stopped
 
 networks:
   llm-network:
@@ -82,4 +79,4 @@ networks:
 volumes:
   postgres_data:
   chroma_data:
-  # ollama_data:  # Uncomment if using Ollama
+  # ollama_data:  

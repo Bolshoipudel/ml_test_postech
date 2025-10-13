@@ -1,4 +1,4 @@
-"""API routes for the LLM Assistant."""
+"""API роуты для LLM Assistant."""
 from fastapi import APIRouter, HTTPException, status
 from typing import Dict, List
 import uuid
@@ -21,18 +21,19 @@ from app.models.schemas import (
 from app.config import settings
 from app.agents.sql_agent import sql_agent
 from app.agents.rag_agent import rag_agent
+from app.agents.web_search_agent import web_search_agent
+from app.services.orchestrator_service import orchestrator
 
 router = APIRouter(prefix="/api/v1", tags=["api"])
 
-# In-memory storage for chat history (temporary solution)
-# TODO: Replace with persistent storage (Redis or Database)
+# Временное хранилище истории чата в памяти
+# TODO: Заменить на постоянное хранилище (Redis или БД)
 chat_history: Dict[str, List[Message]] = {}
 feedback_storage: List[Dict] = []
 
 
 @router.get("/health", response_model=HealthResponse)
 async def health_check():
-    """Health check endpoint."""
     return HealthResponse(
         status="healthy",
         version=settings.app_version,
@@ -47,20 +48,17 @@ async def health_check():
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     """
-    Main chat endpoint.
+    Основной чат-эндпоинт.
 
-    This endpoint receives user messages and returns AI-generated responses.
-    The agent automatically selects appropriate tools (RAG, SQL, Web Search).
+    Принимает сообщения пользователя и возвращает AI-ответы.
+    Агент автоматически выбирает подходящие инструменты (RAG, SQL, Веб-поиск).
     """
     try:
-        # Generate or use existing session_id
         session_id = request.session_id or str(uuid.uuid4())
 
-        # Initialize chat history for new sessions
         if session_id not in chat_history:
             chat_history[session_id] = []
 
-        # Add user message to history
         user_message = Message(
             role=MessageRole.USER,
             content=request.message,
@@ -68,124 +66,50 @@ async def chat(request: ChatRequest):
         )
         chat_history[session_id].append(user_message)
 
-        # TODO: Implement actual agent logic here
-        # For now, return a placeholder response
+        # Обработка запроса через Orchestrator (с Router Agent)
+        result = await orchestrator.process_query(
+            query=request.message,
+            use_history=request.use_history,
+            conversation_history=[
+                {"role": msg.role.value, "content": msg.content}
+                for msg in chat_history[session_id]
+            ] if request.use_history else None
+        )
 
-        # Placeholder: Simple keyword-based tool selection
+        response_text = result.get("answer", "Не удалось обработать запрос.")
+        sources = result.get("sources", [])
+
+        # Конвертация tools_used в модели ToolUsage
         tools_used = []
-        response_text = ""
-        sources = []
+        for tool_usage in result.get("tools_used", []):
+            # Нормализация tool_type к lowercase для соответствия ToolType enum
+            raw_tool_type = tool_usage.get("tool_type", "none")
+            if isinstance(raw_tool_type, str):
+                raw_tool_type = raw_tool_type.lower()
 
-        message_lower = request.message.lower()
-
-        # Simple routing logic (will be replaced with actual agent)
-        if any(keyword in message_lower for keyword in ['сколько', 'кто работает', 'команда', 'разработчик', 'инцидент', 'баг', 'продукт', 'отдел', 'фича', 'feature']):
-            # SQL-related query - use SQL Agent
-            try:
-                logger.info(f"Routing to SQL Agent for question: {request.message}")
-
-                result = sql_agent.execute_query(request.message, validate=True)
-
-                if result["success"]:
-                    # Format results into natural language
-                    formatted_answer = sql_agent.format_results(
-                        result["results"],
-                        request.message
-                    )
-
-                    tools_used.append(ToolUsage(
-                        tool_type=ToolType.SQL,
-                        query=result["sql_query"],
-                        result_summary=f"Найдено {result['row_count']} записей",
-                        metadata={
-                            "row_count": result["row_count"],
-                            "sql_query": result["sql_query"]
-                        }
-                    ))
-                    response_text = formatted_answer
-                    sources = ["database: PostgreSQL"]
-                else:
-                    # SQL generation failed
-                    logger.warning(f"SQL Agent failed: {result.get('error')}")
-                    response_text = f"Не удалось выполнить запрос к базе данных: {result.get('error', 'Неизвестная ошибка')}"
-                    tools_used.append(ToolUsage(
-                        tool_type=ToolType.SQL,
-                        query=result.get("sql_query"),
-                        result_summary="Ошибка выполнения запроса",
-                        metadata={"error": result.get("error")}
-                    ))
-
-            except Exception as e:
-                logger.error(f"SQL Agent error: {e}")
-                response_text = f"Произошла ошибка при обработке запроса: {str(e)}"
-                tools_used.append(ToolUsage(
-                    tool_type=ToolType.SQL,
-                    result_summary="Ошибка SQL Agent",
-                    metadata={"error": str(e)}
-                ))
-            sources = ["database"]
-
-        elif any(keyword in message_lower for keyword in ['как работает', 'что такое', 'документация', 'инструкция', 'описание', 'возможности', 'функции', 'архитектура', 'интеграция', 'поддержка', 'лицензирование', 'требования']):
-            # RAG-related query - use RAG Agent
-            try:
-                logger.info(f"Routing to RAG Agent for question: {request.message}")
-
-                result = rag_agent.answer_question(request.message, top_k=5)
-
-                if result["success"]:
-                    tools_used.append(ToolUsage(
-                        tool_type=ToolType.RAG,
-                        query=request.message,
-                        result_summary=f"Найдено {result['relevant_chunks']} релевантных документов",
-                        metadata={
-                            "retrieved_chunks": result["retrieved_chunks"],
-                            "relevant_chunks": result["relevant_chunks"],
-                            "top_similarity": result.get("top_similarity", 0.0)
-                        }
-                    ))
-                    response_text = result["answer"]
-                    sources = [f"documentation: {src}" for src in result["sources"]]
-                else:
-                    # RAG failed
-                    logger.warning(f"RAG Agent failed: {result.get('answer')}")
-                    response_text = result["answer"]
-                    tools_used.append(ToolUsage(
-                        tool_type=ToolType.RAG,
-                        query=request.message,
-                        result_summary="Релевантные документы не найдены",
-                        metadata={"error": result.get("error", "No relevant documents")}
-                    ))
-                    sources = []
-
-            except Exception as e:
-                logger.error(f"RAG Agent error: {e}")
-                response_text = f"Произошла ошибка при поиске в документации: {str(e)}"
-                tools_used.append(ToolUsage(
-                    tool_type=ToolType.RAG,
-                    result_summary="Ошибка RAG Agent",
-                    metadata={"error": str(e)}
-                ))
-                sources = []
-
-        elif any(keyword in message_lower for keyword in ['новости', 'тренд', 'найди информацию', 'поищи']):
-            # Web search query
             tools_used.append(ToolUsage(
-                tool_type=ToolType.WEB_SEARCH,
+                tool_type=ToolType(raw_tool_type),
+                query=tool_usage.get("query"),
+                result_summary=tool_usage.get("result_summary"),
+                metadata=tool_usage.get("metadata")
+            ))
+
+        # Добавление решения роутера в метаданные
+        routing_decision = result.get("routing_decision", {})
+        if routing_decision:
+            tools_used.insert(0, ToolUsage(
+                tool_type=ToolType.ROUTER,
                 query=request.message,
-                result_summary="Web search completed"
+                result_summary=f"Routing: {routing_decision.get('tool', 'UNKNOWN')}",
+                reasoning=routing_decision.get("reasoning"),
+                confidence=routing_decision.get("confidence"),
+                metadata={
+                    "tool": routing_decision.get("tool"),
+                    "query_type": routing_decision.get("query_type"),
+                    "tools": routing_decision.get("tools", [])
+                }
             ))
-            response_text = "Это запрос для веб-поиска. (Агент Web Search пока не реализован)"
-            sources = ["web"]
 
-        else:
-            # General query
-            tools_used.append(ToolUsage(
-                tool_type=ToolType.NONE,
-                result_summary="Direct LLM response"
-            ))
-            response_text = f"Вы сказали: '{request.message}'. Агенты пока не реализованы, но инфраструктура готова!"
-
-        # Add assistant message to history
         assistant_message = Message(
             role=MessageRole.ASSISTANT,
             content=response_text,
@@ -216,7 +140,6 @@ async def chat(request: ChatRequest):
 
 @router.post("/feedback", response_model=FeedbackResponse)
 async def submit_feedback(request: FeedbackRequest):
-    """Submit feedback for a chat response."""
     try:
         feedback_entry = {
             "session_id": request.session_id,
@@ -244,7 +167,7 @@ async def submit_feedback(request: FeedbackRequest):
 
 @router.get("/history/{session_id}", response_model=ChatHistory)
 async def get_history(session_id: str):
-    """Get chat history for a session."""
+    """Получение истории чата для сессии."""
     if session_id not in chat_history:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -262,7 +185,7 @@ async def get_history(session_id: str):
 
 @router.delete("/history/{session_id}")
 async def clear_history(session_id: str):
-    """Clear chat history for a session."""
+    """Очистка истории чата для сессии."""
     if session_id in chat_history:
         del chat_history[session_id]
         logger.info(f"History cleared for session {session_id}")
@@ -276,7 +199,7 @@ async def clear_history(session_id: str):
 
 @router.get("/stats")
 async def get_stats():
-    """Get system statistics."""
+    """Статистика системы."""
     total_sessions = len(chat_history)
     total_messages = sum(len(messages) for messages in chat_history.values())
     total_feedback = len(feedback_storage)
@@ -297,7 +220,7 @@ async def get_stats():
 
 @router.get("/rag/stats")
 async def get_rag_stats():
-    """Get RAG collection statistics and test search."""
+    """Статистика RAG коллекции и тестовый поиск."""
     try:
         if not rag_agent._initialized:
             rag_agent.initialize(load_docs=False)
@@ -331,7 +254,7 @@ async def get_rag_stats():
 
 @router.post("/rag/reload")
 async def reload_rag_documents():
-    """Force reload documents from disk."""
+    """Принудительная перезагрузка документов с диска."""
     try:
         logger.info("Force reloading RAG documents...")
         rag_agent.reload_documents("./data/docs")
@@ -348,7 +271,7 @@ async def reload_rag_documents():
 
 @router.get("/rag/debug/{query}")
 async def debug_rag_search(query: str):
-    """Debug RAG search to see actual distances and similarities."""
+    """Отладка RAG поиска для просмотра расстояний и сходства."""
     try:
         if not rag_agent._initialized:
             rag_agent.initialize(load_docs=False)
