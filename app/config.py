@@ -42,6 +42,8 @@ class Settings(BaseSettings):
     chunk_overlap: int = 200
 
     # База данных
+    database_type: str = "sqlite"  # "sqlite" или "postgresql"
+    sqlite_database_path: str = "./data/sql/team_mock.db"
     postgres_user: str = "llm_assistant"
     postgres_password: str = "secure_password"
     postgres_db: str = "llm_assistant_db"
@@ -69,10 +71,14 @@ class Settings(BaseSettings):
     def db_url(self) -> str:
         if self.database_url:
             return self.database_url
-        return (
-            f"postgresql://{self.postgres_user}:{self.postgres_password}"
-            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
-        )
+
+        if self.database_type.lower() == "sqlite":
+            return f"sqlite:///{self.sqlite_database_path}"
+        else:
+            return (
+                f"postgresql://{self.postgres_user}:{self.postgres_password}"
+                f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+            )
     
     @property
     def allowed_sql_ops_list(self) -> List[str]:

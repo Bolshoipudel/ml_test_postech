@@ -155,7 +155,7 @@ cp .env.example .env
 # LLM Provider
 OPENAI_API_KEY=sk-your_openai_key_here
 LLM_PROVIDER=openai
-LLM_MODEL=gpt-4
+LLM_MODEL=gpt-4.1
 
 # Web Search (опционально)
 TAVILY_API_KEY=tvly-your_tavily_key_here
@@ -168,10 +168,6 @@ POSTGRES_DB=llm_assistant_db
 
 4. **Запустите с Docker Compose**
 ```bash
-# Windows
-docker-run.bat
-
-# Linux/Mac
 docker-compose up --build -d
 ```
 

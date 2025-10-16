@@ -10,8 +10,8 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      - POSTGRES_HOST=postgres
+      - DATABASE_TYPE=sqlite
+      - SQLITE_DATABASE_PATH=/app/data/sql/team_mock.db
     env_file:
       - .env
     volumes:
@@ -19,9 +19,6 @@ services:
       - ./data:/app/data
       - ./logs:/app/logs
       - ./chroma_db:/app/chroma_db
-    depends_on:
-      postgres:
-        condition: service_healthy
     networks:
       - llm-network
     restart: unless-stopped

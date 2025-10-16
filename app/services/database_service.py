@@ -20,14 +20,24 @@ class DatabaseService:
 
     def initialize(self):
         try:
-            logger.info(f"Connecting to database: {settings.postgres_host}:{settings.postgres_port}")
+            if settings.database_type.lower() == "sqlite":
+                logger.info(f"Connecting to SQLite database: {settings.sqlite_database_path}")
+            else:
+                logger.info(f"Connecting to PostgreSQL database: {settings.postgres_host}:{settings.postgres_port}")
 
-            self.engine = create_engine(
-                settings.db_url,
-                pool_pre_ping=True,
-                pool_size=5,
-                max_overflow=10
-            )
+            # Conditional pooling based on database type
+            if settings.database_type.lower() == "sqlite":
+                self.engine = create_engine(
+                    settings.db_url,
+                    connect_args={"check_same_thread": False}
+                )
+            else:
+                self.engine = create_engine(
+                    settings.db_url,
+                    pool_pre_ping=True,
+                    pool_size=5,
+                    max_overflow=10
+                )
 
             self.SessionLocal = sessionmaker(
                 autocommit=False,

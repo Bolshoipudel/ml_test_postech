@@ -16,7 +16,11 @@ from app.models.schemas import (
     Message,
     MessageRole,
     ToolUsage,
-    ToolType
+    ToolType,
+    EvaluateRequest,
+    EvaluateResponse,
+    RoutingInfo,
+    MetricScore
 )
 from app.config import settings
 from app.agents.sql_agent import sql_agent
@@ -300,3 +304,121 @@ async def debug_rag_search(query: str):
     except Exception as e:
         logger.error(f"Error in debug search: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# EVALUATION ENDPOINT
+# =============================================================================
+
+@router.post("/evaluate", response_model=EvaluateResponse)
+async def evaluate_single_query(request: EvaluateRequest):
+    """
+    Оценка качества одиночного запроса через DeepEval метрики.
+
+    Этот endpoint позволяет оценить качество ответа системы на конкретный запрос
+    с использованием метрик DeepEval:
+    - Answer Relevancy: релевантность ответа вопросу
+    - Faithfulness: соответствие источникам (отсутствие галлюцинаций)
+
+    Args:
+        request: EvaluateRequest с query, expected_output, retrieval_context
+
+    Returns:
+        EvaluateResponse с scores по метрикам
+
+    Example:
+        POST /api/v1/evaluate
+        {
+            "query": "Сколько программистов в команде?",
+            "expected_output": "В команде 2 программиста",
+            "retrieval_context": ["SQLite database: employees table"]
+        }
+    """
+    try:
+        # Импорт DeepEval метрик
+        from deepeval.metrics import AnswerRelevancyMetric, FaithfulnessMetric
+        from deepeval.test_case import LLMTestCase
+
+        # Вызов основного chat endpoint
+        chat_request = ChatRequest(
+            message=request.query,
+            use_history=False
+        )
+        response = await chat(chat_request)
+
+        # Извлечение routing decision
+        tools_used = response.tools_used
+        router_tool = "unknown"
+        router_confidence = 0.0
+        router_reasoning = ""
+
+        if tools_used and tools_used[0].tool_type == ToolType.ROUTER:
+            router_decision = tools_used[0]
+            metadata = router_decision.metadata or {}
+            router_tool = metadata.get("tool", "unknown").lower()
+            router_confidence = router_decision.confidence or 0.0
+            router_reasoning = router_decision.reasoning or ""
+
+        # Создание routing info
+        routing_info = RoutingInfo(
+            tool=router_tool,
+            confidence=router_confidence,
+            reasoning=router_reasoning
+        )
+
+        # Создание DeepEval test case
+        test_case = LLMTestCase(
+            input=request.query,
+            actual_output=response.message,
+            expected_output=request.expected_output,
+            retrieval_context=request.retrieval_context or [],
+            context=response.sources or []
+        )
+
+        # Применение метрик
+        metrics_to_use = [
+            AnswerRelevancyMetric(threshold=0.7, model="gpt-4", include_reason=True),
+            FaithfulnessMetric(threshold=0.7, model="gpt-4", include_reason=True)
+        ]
+
+        # Измерение метрик
+        metric_scores = {}
+
+        for metric in metrics_to_use:
+            try:
+                metric.measure(test_case)
+
+                metric_scores[metric.__name__] = MetricScore(
+                    score=metric.score,
+                    threshold=metric.threshold,
+                    passed=metric.is_successful(),
+                    reason=getattr(metric, "reason", None)
+                )
+
+            except Exception as e:
+                logger.error(f"Error measuring metric {metric.__name__}: {e}")
+                metric_scores[metric.__name__] = MetricScore(
+                    score=0.0,
+                    threshold=metric.threshold,
+                    passed=False,
+                    reason=f"Error: {str(e)}"
+                )
+
+        # Формирование ответа
+        return EvaluateResponse(
+            query=request.query,
+            response=response.message,
+            routing=routing_info,
+            metrics=metric_scores
+        )
+
+    except HTTPException:
+        # Re-raise HTTP exceptions from chat endpoint
+        raise
+
+    except Exception as e:
+        logger.error(f"Error in evaluate endpoint: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Evaluation error: {str(e)}"
+        )

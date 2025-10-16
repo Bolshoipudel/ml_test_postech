@@ -106,3 +106,76 @@ class ErrorResponse(BaseModel):
     error: str
     detail: Optional[str] = None
     timestamp: datetime = Field(default_factory=datetime.now)
+
+
+# =============================================================================
+# Evaluation Schemas
+# =============================================================================
+
+class MetricScore(BaseModel):
+    """Результат одной метрики DeepEval."""
+    score: float = Field(..., description="Metric score (0.0 to 1.0)")
+    threshold: float = Field(..., description="Threshold for pass/fail")
+    passed: bool = Field(..., description="Whether metric passed threshold")
+    reason: Optional[str] = Field(None, description="Detailed reasoning from metric")
+
+
+class RoutingInfo(BaseModel):
+    """Информация о роутинге запроса."""
+    tool: str = Field(..., description="Tool selected by router")
+    confidence: float = Field(..., description="Router confidence score")
+    reasoning: str = Field(..., description="Router reasoning")
+
+
+class EvaluateRequest(BaseModel):
+    """Модель запроса для evaluate эндпоинта."""
+    query: str = Field(..., description="User query to evaluate", min_length=1)
+    expected_output: str = Field(..., description="Expected ground truth answer", min_length=1)
+    retrieval_context: Optional[List[str]] = Field(
+        None,
+        description="Context for RAG evaluation (optional)"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "query": "Сколько программистов в команде?",
+                "expected_output": "В команде 2 программиста",
+                "retrieval_context": ["SQLite database: employees table"]
+            }
+        }
+
+
+class EvaluateResponse(BaseModel):
+    """Модель ответа для evaluate эндпоинта."""
+    query: str = Field(..., description="Original query")
+    response: str = Field(..., description="System response")
+    routing: RoutingInfo = Field(..., description="Routing decision")
+    metrics: Dict[str, MetricScore] = Field(..., description="DeepEval metric scores")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "query": "Сколько программистов в команде?",
+                "response": "В команде работает 2 программиста.",
+                "routing": {
+                    "tool": "sql",
+                    "confidence": 0.95,
+                    "reasoning": "Query requires database lookup"
+                },
+                "metrics": {
+                    "Answer Relevancy": {
+                        "score": 0.92,
+                        "threshold": 0.7,
+                        "passed": True,
+                        "reason": "Response directly answers the question"
+                    },
+                    "Faithfulness": {
+                        "score": 0.88,
+                        "threshold": 0.7,
+                        "passed": True,
+                        "reason": "No hallucinations detected"
+                    }
+                }
+            }
+        }

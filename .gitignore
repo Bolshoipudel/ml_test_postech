@@ -47,8 +47,8 @@ ENV/
 htmlcov/
 
 # Data
-data/docs/*
-data/sql/*
+#data/docs/*
+#data/sql/*
 !data/docs/.gitkeep
 !data/sql/.gitkeep
 
