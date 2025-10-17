@@ -362,7 +362,7 @@ All metrics are within acceptable ranges. Continue monitoring performance.
 
 def generate_metrics_summary(results: Dict[str, Any]) -> str:
     """
-    Генерация сводки по DeepEval метрикам (если доступны).
+    Генерация сводки по DeepEval метрикам.
 
     Args:
         results: Результаты evaluation
@@ -370,14 +370,14 @@ def generate_metrics_summary(results: Dict[str, Any]) -> str:
     Returns:
         Markdown секция
     """
-    # Placeholder для будущей интеграции с DeepEval метриками
-    # В текущей версии evaluate_system.py не сохраняет детальные метрики
+    deepeval_metrics = results.get("aggregate_stats", {}).get("deepeval_metrics", {})
 
-    return """## DeepEval Metrics Summary
+    if not deepeval_metrics:
+        return """## DeepEval Metrics Summary
 
-_Detailed DeepEval metrics will be available after running full evaluation with metric measurement._
+_No DeepEval metrics data available. Metrics may not have been run during evaluation._
 
-**Metrics Used:**
+**Metrics Configuration:**
 - Answer Relevancy Metric (threshold: 0.7)
 - Faithfulness Metric (threshold: 0.7)
 - Contextual Relevancy Metric (threshold: 0.7)
@@ -386,6 +386,55 @@ _Detailed DeepEval metrics will be available after running full evaluation with 
 ---
 
 """
+
+    # Генерация таблицы с метриками
+    section = """## DeepEval Metrics Summary
+
+| Metric Name | Avg Score | Min | Max | Tests | Pass Rate | Status |
+|-------------|-----------|-----|-----|-------|-----------|--------|
+"""
+
+    # Сортировка метрик по average_score
+    sorted_metrics = sorted(
+        deepeval_metrics.items(),
+        key=lambda x: x[1].get("average_score", 0),
+        reverse=True
+    )
+
+    for metric_name, metric_stats in sorted_metrics:
+        avg_score = metric_stats.get("average_score", 0)
+        min_score = metric_stats.get("min_score", 0)
+        max_score = metric_stats.get("max_score", 0)
+        count = metric_stats.get("count", 0)
+        pass_rate = metric_stats.get("pass_rate", 0)
+
+        # Определение статуса
+        if avg_score >= 0.85:
+            status = "✅ EXCELLENT"
+        elif avg_score >= 0.7:
+            status = "🟢 GOOD"
+        elif avg_score >= 0.5:
+            status = "🟡 ACCEPTABLE"
+        else:
+            status = "🔴 POOR"
+
+        section += f"| {metric_name:20s} | {avg_score:9.3f} | {min_score:3.2f} | {max_score:3.2f} | {count:5d} | {pass_rate:9.1%} | {status:13s} |\n"
+
+    section += "\n**Legend:**\n"
+    section += "- ✅ EXCELLENT: Average score >= 0.85\n"
+    section += "- 🟢 GOOD: Average score >= 0.70\n"
+    section += "- 🟡 ACCEPTABLE: Average score >= 0.50\n"
+    section += "- 🔴 POOR: Average score < 0.50\n\n"
+
+    section += "**Metrics Description:**\n"
+    section += "- **Answer Relevancy**: Measures how relevant the LLM's answer is to the question\n"
+    section += "- **Faithfulness**: Checks if the answer is faithful to the context (no hallucinations)\n"
+    section += "- **Contextual Relevancy**: Evaluates quality of retrieved context (for RAG)\n"
+    section += "- **Router Accuracy**: Custom metric for routing decision correctness\n\n"
+
+    section += "---\n\n"
+
+    return section
 
 
 def generate_footer() -> str:

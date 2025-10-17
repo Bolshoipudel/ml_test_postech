@@ -56,8 +56,8 @@ class RouterAccuracyMetric(BaseMetric):
             Score: 1.0 если роутинг правильный, 0.0 если нет
         """
         try:
-            # Извлечение данных из metadata
-            metadata = test_case.additional_metadata or {}
+            # Извлечение данных из metadata (безопасный доступ)
+            metadata = getattr(test_case, 'additional_metadata', {})
             expected_tool = metadata.get("expected_tool", "").lower()
             actual_tool = metadata.get("actual_tool", "").lower()
             confidence = metadata.get("confidence", 0.0)
@@ -125,7 +125,7 @@ class MetricsConfig:
 
     def __init__(
         self,
-        model: str = "gpt-4",
+        model: str = "gpt-4.1",
         threshold: float = 0.7,
         include_reason: bool = True
     ):
@@ -283,19 +283,23 @@ def create_test_case_with_routing(
     Returns:
         LLMTestCase с метаданными роутинга
     """
-    return LLMTestCase(
+    test_case = LLMTestCase(
         input=query,
         actual_output=actual_output,
         expected_output=expected_output,
         retrieval_context=retrieval_context or [],
-        context=context or [],
-        additional_metadata={
-            "expected_tool": expected_tool,
-            "actual_tool": actual_tool,
-            "confidence": confidence,
-            "reasoning": reasoning
-        }
+        context=context or []
     )
+
+    # Добавляем metadata как атрибут ПОСЛЕ создания
+    test_case.additional_metadata = {
+        "expected_tool": expected_tool,
+        "actual_tool": actual_tool,
+        "confidence": confidence,
+        "reasoning": reasoning
+    }
+
+    return test_case
 
 
 def print_metric_results(
@@ -370,7 +374,7 @@ def calculate_aggregate_scores(
 
 # Глобальная конфигурация по умолчанию
 default_config = MetricsConfig(
-    model="gpt-4",
+    model="gpt-4.1",
     threshold=0.7,
     include_reason=True
 )
@@ -407,7 +411,7 @@ if __name__ == "__main__":
 
     # Создание конфигурации
     config = MetricsConfig(
-        model="gpt-4",
+        model="gpt-4.1",
         threshold=0.7,
         include_reason=True
     )

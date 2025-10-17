@@ -53,7 +53,7 @@ TIMEOUT = 30
 
 # Metrics configuration
 metrics_config = MetricsConfig(
-    model="gpt-4",
+    model="gpt-4.1",
     threshold=0.7,
     include_reason=True
 )
@@ -161,8 +161,8 @@ async def test_sql_agent_end_to_end(api_client, test_case_id):
     # Метрики для SQL
     metrics = [
         RouterAccuracyMetric(threshold=0.7, confidence_threshold=0.8),
-        AnswerRelevancyMetric(threshold=0.7, model="gpt-4"),
-        FaithfulnessMetric(threshold=0.7, model="gpt-4")
+        AnswerRelevancyMetric(threshold=0.7, model="gpt-4.1"),
+        FaithfulnessMetric(threshold=0.7, model="gpt-4.1")
     ]
 
     # DeepEval assertion
@@ -193,9 +193,9 @@ async def test_rag_agent_end_to_end(api_client, test_case_id):
     # Метрики для RAG (включая Contextual Relevancy)
     metrics = [
         RouterAccuracyMetric(threshold=0.7, confidence_threshold=0.75),
-        AnswerRelevancyMetric(threshold=0.7, model="gpt-4"),
-        FaithfulnessMetric(threshold=0.7, model="gpt-4"),
-        ContextualRelevancyMetric(threshold=0.7, model="gpt-4")
+        AnswerRelevancyMetric(threshold=0.7, model="gpt-4.1"),
+        FaithfulnessMetric(threshold=0.7, model="gpt-4.1"),
+        ContextualRelevancyMetric(threshold=0.7, model="gpt-4.1")
     ]
 
     # DeepEval assertion
@@ -224,7 +224,7 @@ async def test_web_search_agent_end_to_end(api_client, test_case_id):
     # Метрики для Web Search (без Faithfulness т.к. нет фиксированного контекста)
     metrics = [
         RouterAccuracyMetric(threshold=0.7, confidence_threshold=0.8),
-        AnswerRelevancyMetric(threshold=0.7, model="gpt-4")
+        AnswerRelevancyMetric(threshold=0.7, model="gpt-4.1")
     ]
 
     # DeepEval assertion
@@ -254,9 +254,9 @@ async def test_multiple_agents_end_to_end(api_client, test_case_id):
     # Метрики для MULTIPLE (полный набор)
     metrics = [
         RouterAccuracyMetric(threshold=0.7, confidence_threshold=0.7),
-        AnswerRelevancyMetric(threshold=0.7, model="gpt-4"),
-        FaithfulnessMetric(threshold=0.7, model="gpt-4"),
-        ContextualRelevancyMetric(threshold=0.7, model="gpt-4")
+        AnswerRelevancyMetric(threshold=0.7, model="gpt-4.1"),
+        FaithfulnessMetric(threshold=0.7, model="gpt-4.1"),
+        ContextualRelevancyMetric(threshold=0.7, model="gpt-4.1")
     ]
 
     # DeepEval assertion
@@ -288,7 +288,7 @@ async def test_comprehensive_sql_workflow(api_client):
         # Базовые метрики
         metrics = [
             RouterAccuracyMetric(threshold=0.7),
-            AnswerRelevancyMetric(threshold=0.7, model="gpt-4")
+            AnswerRelevancyMetric(threshold=0.7, model="gpt-4.1")
         ]
 
         assert_test(test_case=test_case, metrics=metrics)
@@ -315,9 +315,9 @@ async def test_comprehensive_rag_workflow(api_client):
         # Полные RAG метрики
         metrics = [
             RouterAccuracyMetric(threshold=0.7),
-            AnswerRelevancyMetric(threshold=0.7, model="gpt-4"),
-            FaithfulnessMetric(threshold=0.7, model="gpt-4"),
-            ContextualRelevancyMetric(threshold=0.7, model="gpt-4")
+            AnswerRelevancyMetric(threshold=0.7, model="gpt-4.1"),
+            FaithfulnessMetric(threshold=0.7, model="gpt-4.1"),
+            ContextualRelevancyMetric(threshold=0.7, model="gpt-4.1")
         ]
 
         assert_test(test_case=test_case, metrics=metrics)
@@ -347,7 +347,7 @@ async def test_high_quality_responses(api_client):
         # Метрики с повышенным порогом
         metrics = [
             RouterAccuracyMetric(threshold=0.8, confidence_threshold=0.85),
-            AnswerRelevancyMetric(threshold=0.8, model="gpt-4")
+            AnswerRelevancyMetric(threshold=0.8, model="gpt-4.1")
         ]
 
         assert_test(test_case=test_case, metrics=metrics)

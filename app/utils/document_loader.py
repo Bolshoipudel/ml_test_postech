@@ -134,39 +134,48 @@ class TextSplitter:
 
         chunks = []
         start = 0
+        text_len = len(text)
 
-        while start < len(text):
-            end = start + self.chunk_size
+        logger.info(f"Splitting text of {text_len} chars into chunks of {self.chunk_size} with overlap {self.chunk_overlap}")
 
-            # Попытка разбить в удобном месте
-            if end < len(text):
-                # Попытка разбить на параграфе
-                paragraph_break = text.rfind('\n\n', start, end)
-                if paragraph_break != -1 and paragraph_break > start:
-                    end = paragraph_break
-                else:
-                    # Попытка разбить на новой строке
-                    newline_break = text.rfind('\n', start, end)
-                    if newline_break != -1 and newline_break > start:
-                        end = newline_break
-                    else:
-                        # Попытка разбить на предложении
-                        sentence_break = max(
-                            text.rfind('. ', start, end),
-                            text.rfind('! ', start, end),
-                            text.rfind('? ', start, end)
-                        )
-                        if sentence_break != -1 and sentence_break > start:
-                            end = sentence_break + 1
+        while start < text_len:
+            # Определяем конец текущего chunk
+            end = min(start + self.chunk_size, text_len)
 
+            # Попытка найти хорошую точку разрыва ТОЛЬКО если мы не в конце текста
+            if end < text_len:
+                # Ищем оптимальное место для разрыва в последних 20% chunk
+                search_start = end - int(self.chunk_size * 0.2)
+
+                # Приоритет 1: Параграф
+                paragraph_idx = text.rfind('\n\n', search_start, end)
+                if paragraph_idx > start:
+                    end = paragraph_idx + 2  # включаем \n\n
+
+                #Приоритет 2: Новая строка
+                elif (newline_idx := text.rfind('\n', search_start, end)) > start:
+                    end = newline_idx + 1
+
+                # Приоритет 3: Точка с пробелом
+                elif (period_idx := text.rfind('. ', search_start, end)) > start:
+                    end = period_idx + 2
+
+            # Извлечение chunk и добавление в список
             chunk = text[start:end].strip()
             if chunk:
                 chunks.append(chunk)
 
-            # Смещение начала с учетом перекрытия
-            start = end - self.chunk_overlap if end < len(text) else end
+            # Прогресс каждые 20 chunks
+            if len(chunks) % 20 == 0:
+                progress_pct = (start / text_len) * 100
+                logger.info(f"Chunking: {len(chunks)} chunks created, {progress_pct:.1f}% complete")
 
-        logger.debug(f"Split text into {len(chunks)} chunks")
+            # Следующий start: двигаемся вперед на (chunk_size - overlap)
+            # Это ГАРАНТИРУЕТ что мы всегда движемся вперёд
+            step = max(self.chunk_size - self.chunk_overlap, 100)  # минимум 100 символов
+            start += step
+
+        logger.success(f"Split text into {len(chunks)} chunks")
 
         return chunks
 

@@ -40,7 +40,8 @@ async def lifespan(app: FastAPI):
         sql_agent.initialize()
 
         logger.info("Initializing RAG Agent...")
-        rag_agent.initialize(load_docs=True, docs_directory="./data/docs")
+        # Временно отключаем загрузку документов при старте для отладки
+        rag_agent.initialize(load_docs=False, docs_directory="./data/docs")
 
         logger.info("Initializing Web Search Agent...")
         web_search_agent.initialize()

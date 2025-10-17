@@ -58,3 +58,16 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+/tests*
+nul
+
+# Streamlit
+.streamlit/secrets.toml
+
+test_deepeval_api.py
+evaluation/recompute_metrics.py
+evaluation/recompute_metrics_skip.py
+evaluation/recompute_metrics_20.py
+evaluation_results_full
+evaluation_results_sql
+chroma_db/

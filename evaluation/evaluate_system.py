@@ -176,7 +176,7 @@ class EvaluationRunner:
         self.config = config
         self.client = LLMAssistantClient(config)
         self.metrics_config = MetricsConfig(
-            model="gpt-4",
+            model="gpt-4.1",
             threshold=0.7,
             include_reason=True
         )
@@ -289,7 +289,10 @@ class EvaluationRunner:
             context=sources
         )
 
-        # Сохранение дополнительной информации
+        # Сохранение дополнительной информации (безопасная инициализация)
+        if not hasattr(test_case, 'additional_metadata'):
+            test_case.additional_metadata = {}
+
         test_case.additional_metadata.update({
             "test_id": test_id,
             "category": test_case_data["category"],
@@ -367,8 +370,7 @@ class EvaluationRunner:
             # DeepEval evaluate
             eval_results = evaluate(
                 test_cases=self.test_cases,
-                metrics=metrics,
-                print_results=True
+                metrics=metrics
             )
 
             logger.success("DeepEval evaluation completed!")
@@ -399,35 +401,74 @@ class EvaluationRunner:
         Компиляция результатов evaluation.
 
         Args:
-            eval_results: Результаты от DeepEval
+            eval_results: Результаты от DeepEval (EvaluationResult object)
 
         Returns:
             Структурированные результаты
         """
-        # Извлечение метрик из тест-кейсов
+        # Извлечение результатов из eval_results.test_results
         all_metric_results = []
 
-        for test_case in self.test_cases:
-            test_id = test_case.additional_metadata.get("test_id", "unknown")
-            category = test_case.additional_metadata.get("category", "unknown")
+        # DeepEval 3.x возвращает EvaluationResult с test_results списком
+        if eval_results and hasattr(eval_results, 'test_results'):
+            for test_result_obj in eval_results.test_results:
+                # Извлечение метаданных из additional_metadata
+                additional_metadata = getattr(test_result_obj, 'additional_metadata', {})
+                test_id = additional_metadata.get("test_id", "unknown")
+                category = additional_metadata.get("category", "unknown")
 
-            # Placeholder для результатов метрик
-            # В реальности DeepEval их добавляет в test_case
-            # Здесь упрощенная версия
+                # Извлечение метрик из metrics_data
+                metrics_scores = {}
+                metrics_success = {}
+                metrics_reasons = {}
 
-            test_result = {
-                "test_id": test_id,
-                "query": test_case.input,
-                "category": category,
-                "expected_tool": test_case.additional_metadata.get("expected_tool"),
-                "actual_tool": test_case.additional_metadata.get("actual_tool"),
-                "confidence": test_case.additional_metadata.get("confidence"),
-                "reasoning": test_case.additional_metadata.get("reasoning"),
-                "actual_output": test_case.actual_output,
-                "expected_output": test_case.expected_output
-            }
+                if hasattr(test_result_obj, 'metrics_data'):
+                    for metric_data in test_result_obj.metrics_data:
+                        metric_name = metric_data.name
+                        metrics_scores[metric_name] = metric_data.score
+                        metrics_success[metric_name] = metric_data.success
+                        metrics_reasons[metric_name] = metric_data.reason
 
-            all_metric_results.append(test_result)
+                test_result = {
+                    "test_id": test_id,
+                    "query": test_result_obj.input,
+                    "category": category,
+                    "expected_tool": additional_metadata.get("expected_tool"),
+                    "actual_tool": additional_metadata.get("actual_tool"),
+                    "confidence": additional_metadata.get("confidence"),
+                    "reasoning": additional_metadata.get("reasoning"),
+                    "actual_output": test_result_obj.actual_output,
+                    "expected_output": test_result_obj.expected_output,
+                    # Добавляем результаты метрик
+                    "metrics_scores": metrics_scores,
+                    "metrics_success": metrics_success,
+                    "metrics_reasons": metrics_reasons
+                }
+
+                all_metric_results.append(test_result)
+        else:
+            # Fallback для случая если eval_results пустой
+            logger.warning("eval_results is empty or has no test_results attribute")
+            for test_case in self.test_cases:
+                test_id = test_case.additional_metadata.get("test_id", "unknown")
+                category = test_case.additional_metadata.get("category", "unknown")
+
+                test_result = {
+                    "test_id": test_id,
+                    "query": test_case.input,
+                    "category": category,
+                    "expected_tool": test_case.additional_metadata.get("expected_tool"),
+                    "actual_tool": test_case.additional_metadata.get("actual_tool"),
+                    "confidence": test_case.additional_metadata.get("confidence"),
+                    "reasoning": test_case.additional_metadata.get("reasoning"),
+                    "actual_output": test_case.actual_output,
+                    "expected_output": test_case.expected_output,
+                    "metrics_scores": {},
+                    "metrics_success": {},
+                    "metrics_reasons": {}
+                }
+
+                all_metric_results.append(test_result)
 
         return {
             "metadata": {
@@ -450,7 +491,7 @@ class EvaluationRunner:
         if not test_results:
             return {}
 
-        # Группировка по expected_tool
+        # Группировка по expected_tool для routing статистики
         by_tool = {}
         for result in test_results:
             tool = result["expected_tool"]
@@ -458,7 +499,7 @@ class EvaluationRunner:
                 by_tool[tool] = []
             by_tool[tool].append(result)
 
-        # Статистика по каждому tool
+        # Статистика по каждому tool (routing)
         tool_stats = {}
         for tool, results in by_tool.items():
             correct = sum(
@@ -475,9 +516,41 @@ class EvaluationRunner:
                 "average_confidence": avg_confidence
             }
 
-        # Общая статистика
+        # Общая routing статистика
         total_correct = sum(stats["correct_routing"] for stats in tool_stats.values())
         total_tests = sum(stats["total"] for stats in tool_stats.values())
+
+        # Агрегация DeepEval метрик
+        metrics_aggregated = {}
+
+        # Собираем все уникальные имена метрик
+        all_metric_names = set()
+        for result in test_results:
+            if "metrics_scores" in result:
+                all_metric_names.update(result["metrics_scores"].keys())
+
+        # Агрегируем каждую метрику
+        for metric_name in all_metric_names:
+            scores = []
+            successes = []
+
+            for result in test_results:
+                if "metrics_scores" in result and metric_name in result["metrics_scores"]:
+                    score = result["metrics_scores"][metric_name]
+                    success = result["metrics_success"].get(metric_name, False)
+
+                    if score is not None:
+                        scores.append(score)
+                        successes.append(1 if success else 0)
+
+            if scores:
+                metrics_aggregated[metric_name] = {
+                    "average_score": sum(scores) / len(scores),
+                    "min_score": min(scores),
+                    "max_score": max(scores),
+                    "count": len(scores),
+                    "pass_rate": sum(successes) / len(successes) if successes else 0
+                }
 
         return {
             "by_tool": tool_stats,
@@ -485,7 +558,8 @@ class EvaluationRunner:
                 "total_tests": total_tests,
                 "correct_routing": total_correct,
                 "routing_accuracy": total_correct / total_tests if total_tests > 0 else 0
-            }
+            },
+            "deepeval_metrics": metrics_aggregated
         }
 
     def save_results(self, results: Dict[str, Any]) -> None:

@@ -377,8 +377,8 @@ async def evaluate_single_query(request: EvaluateRequest):
 
         # Применение метрик
         metrics_to_use = [
-            AnswerRelevancyMetric(threshold=0.7, model="gpt-4", include_reason=True),
-            FaithfulnessMetric(threshold=0.7, model="gpt-4", include_reason=True)
+            AnswerRelevancyMetric(threshold=0.7, model="gpt-4.1", include_reason=True),
+            FaithfulnessMetric(threshold=0.7, model="gpt-4.1", include_reason=True)
         ]
 
         # Измерение метрик

@@ -128,15 +128,32 @@ class RAGService:
                 metadatas.append(doc.metadata)
 
             # Добавление документов батчами
-            batch_size = 100
+            batch_size = 50  # Reduced from 100 to minimize API calls overhead
+            total_batches = (len(documents) + batch_size - 1) // batch_size
+
+            logger.info(f"Starting batch processing: {len(documents)} chunks in {total_batches} batches")
+
+            import time
+            start_time = time.time()
+
             for i in range(0, len(documents), batch_size):
+                batch_start_time = time.time()
                 batch_end = min(i + batch_size, len(documents))
+                batch_num = i // batch_size + 1
+
+                logger.info(f"Processing batch {batch_num}/{total_batches} ({i}-{batch_end}/{len(documents)})...")
+
                 self.collection.add(
                     ids=ids[i:batch_end],
                     documents=texts[i:batch_end],
                     metadatas=metadatas[i:batch_end]
                 )
-                logger.debug(f"Added batch {i // batch_size + 1}: {i}-{batch_end}/{len(documents)}")
+
+                batch_elapsed = time.time() - batch_start_time
+                logger.info(f"✓ Batch {batch_num}/{total_batches} completed in {batch_elapsed:.2f}s")
+
+            total_elapsed = time.time() - start_time
+            logger.success(f"All batches processed in {total_elapsed:.2f}s (avg {total_elapsed/total_batches:.2f}s per batch)")
 
             logger.success(f"Successfully loaded {len(documents)} document chunks into vector store")
 
